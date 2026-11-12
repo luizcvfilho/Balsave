@@ -12,12 +12,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
-RUN groupadd --system valora && useradd --system --gid valora valora
+RUN groupadd --system balsave && useradd --system --gid balsave balsave
 COPY --from=dependencies /app/.venv /app/.venv
 COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-USER valora
+USER balsave
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

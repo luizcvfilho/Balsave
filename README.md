@@ -1,4 +1,4 @@
-# Valora
+# Balsave
 
 A personal finance web application in Brazilian Portuguese (pt-BR) that uses Brazilian reais (BRL). The initial version includes a dashboard with mock data.
 
@@ -24,7 +24,9 @@ make dev
 
 PostgreSQL sets the passwords when it initializes the volume. If you change them later, update the role passwords in the database as well.
 
-To try the prototype in Safari on an iPhone, set `VALORA_BIND_ADDRESS=0.0.0.0` in `.env`, run `make up`, and open `http://<computer-ip>:8080` on an iPhone connected to the same network. Use this configuration with the prototype's mock data. By default, the application listens only on the loopback interface.
+To try the prototype in Safari on an iPhone, set `BALSAVE_BIND_ADDRESS=0.0.0.0` in `.env`, run `make up`, and open `http://<computer-ip>:8080` on an iPhone connected to the same network. Use this configuration with the prototype's mock data. By default, the application listens only on the loopback interface.
+
+Existing `.env` files still work. If you update one, rename `VALORA_BIND_ADDRESS`, `VALORA_PORT`, and `VALORA_DB_PASSWORD` to `BALSAVE_BIND_ADDRESS`, `BALSAVE_PORT`, and `BALSAVE_DB_PASSWORD` and keep the existing values. The Compose project retains the `valora` identifier so Docker continues to use the same PostgreSQL volume.
 
 ## Local checks
 
@@ -53,7 +55,7 @@ make migrate
 1. Sign in to Meu Pluggy, add your bank, and authorize access. [Meu Pluggy guide](https://meu.pluggy.ai/api-guide)
 2. Sign in to the Pluggy Dashboard with the same account. Under **Aplicações**, open your application and go to **Demo**. Select **Conectar conta → MeuPluggy** and authorize access to your existing connections. If you customized the available connectors, enable **MeuPluggy** under **Direct Connectors** in the **Pessoal** group. [Dashboard setup](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
 3. In the **Itens conectados** section, copy the `itemId` for each bank. Use the Client ID and Client Secret from the application that received the items.
-4. From the Valora repository root, run the commands below and enter the application credentials when prompted. Replace `ITEM_ID` with the copied ID and repeat for each bank. If your local `.env` already contains `PLUGGY_CLIENT_ID` and `PLUGGY_CLIENT_SECRET`, add `--env-file ../.env` after `--locked`.
+4. From the Balsave repository root, run the commands below and enter the application credentials when prompted. Replace `ITEM_ID` with the copied ID and repeat for each bank. If your local `.env` already contains `PLUGGY_CLIENT_ID` and `PLUGGY_CLIENT_SECRET`, add `--env-file ../.env` after `--locked`.
 
 ```sh
 cd backend
@@ -76,10 +78,10 @@ The first command authenticates with the application credentials. The second cre
 
 On the free plan, Pluggy requires the **Connect Widget** to create items. After connecting a sandbox item through the widget, pass its `itemId` to the command to query the API with the same credentials. [Item creation rules](https://docs.pluggy.ai/en/reference/error-codes)
 
-In the database schema, assign Valora's own IDs to accounts and transactions and store the imported Pluggy IDs as references. Store the currency and exact amount, and account for each transaction's direction (`type`) and state (`status`). A card purchase can have a positive amount and still be a debit. The available fields vary by institution and account type. [Accounts](https://docs.pluggy.ai/en/docs/products/accounts) · [Transactions](https://docs.pluggy.ai/en/docs/products/transactions)
+In the database schema, assign Balsave's own IDs to accounts and transactions and store the imported Pluggy IDs as references. Store the currency and exact amount, and account for each transaction's direction (`type`) and state (`status`). A card purchase can have a positive amount and still be a debit. The available fields vary by institution and account type. [Accounts](https://docs.pluggy.ai/en/docs/products/accounts) · [Transactions](https://docs.pluggy.ai/en/docs/products/transactions)
 
 ## Project structure
 
-- `frontend/src/app/` contains the dashboard routes, layout, and CSS built with the Next.js App Router, TypeScript, and Tailwind. Configuration files and `package.json` live at the root of `frontend/`. The shared theme tokens and logo live in `assets/`.
+- `frontend/src/app/` contains the dashboard routes, layout, and CSS built with the Next.js App Router, TypeScript, and Tailwind. Configuration files and `package.json` live at the root of `frontend/`. The shared theme tokens and light and dark brand assets live in `assets/`.
 - `backend/` contains the FastAPI application, the PostgreSQL connection through Psycopg, and the Alembic migrations. The `uv.lock` file pins backend dependencies.
 - `infra/` contains the Caddy configuration and the initialization script for the API's PostgreSQL role. The proxy is the only service with a published port and serves the frontend and `/api` from the same origin.

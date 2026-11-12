@@ -1,5 +1,6 @@
 import Image from "next/image";
-import logo from "../../../assets/valora.svg";
+import logoDark from "../../../assets/balsave-logo-dark.svg";
+import logoLight from "../../../assets/balsave-logo-light.svg";
 
 const transactions = [
   { name: "Salário", category: "Receitas", date: "05 nov", amount: 685000 },
@@ -30,8 +31,10 @@ export default function Dashboard() {
       <header className="site-header">
         <div className="page-width header-content">
           <a className="brand" href="#painel">
-            <Image src={logo} alt="" width={36} height={36} />
-            Valora
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcSet={logoDark.src} />
+              <Image src={logoLight} alt="Balsave" width={150} height={50} />
+            </picture>
           </a>
           <nav aria-label="Navegação principal">
             <a href="#painel">Painel</a>

@@ -1,5 +1,5 @@
 [project]
-name = "valora-api"
+name = "balsave-api"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = ["alembic", "fastapi", "psycopg[binary]", "sqlalchemy", "uvicorn"]

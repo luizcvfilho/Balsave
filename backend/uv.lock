@@ -339,7 +339,7 @@ wheels = [
 ]
 
 [[package]]
-name = "valora-api"
+name = "balsave-api"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

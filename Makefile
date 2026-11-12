@@ -25,7 +25,7 @@ env: .env
 	@set -euC; umask 077; \
 		admin_password=$$(openssl rand -hex 24); \
 		app_password=$$(openssl rand -hex 24); \
-		printf 'POSTGRES_PASSWORD=%s\nVALORA_DB_PASSWORD=%s\n' "$$admin_password" "$$app_password" > "$@"
+		printf 'POSTGRES_PASSWORD=%s\nBALSAVE_DB_PASSWORD=%s\n' "$$admin_password" "$$app_password" > "$@"
 
 dev: .env
 	$(COMPOSE_DEV) up --build

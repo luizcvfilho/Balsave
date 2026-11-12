@@ -1,9 +1,9 @@
 
-# Valora - Development Instructions
+# Balsave - Development Instructions
 
 ## Project Overview
 
-Valora is a private, responsive web application for personal finance.
+Balsave is a private, responsive web application for personal finance.
 It runs in desktop browsers and Safari on iPhone. On iPhone, users can
 also install it as a PWA from Safari.
 
@@ -69,7 +69,7 @@ Do not invent Pluggy endpoints or fields.
 
 ## Brand Identity
 
-Brand name: Valora
+Brand name: Balsave
 
 Tagline:
 "Controle, patrimônio e evolução."
@@ -86,13 +86,13 @@ Brand attributes:
 - Modern
 - Clear
 
-The logo is a geometric V integrated with a coin-inspired circular shape. [Valora SVG](assets/valora.svg)
+The logo pairs the Balsave wordmark with a circular symbol and three ascending columns. [Light logo](assets/balsave-logo-light.svg) · [Dark logo](assets/balsave-logo-dark.svg)
 
 Use a subtle terracotta accent.
 
 ## Theme Tokens
 
-Use the CSS tokens for the light and dark palettes, border radii, and spacing. The stylesheet also provides base styles for the page and financial cards. [Valora theme CSS](assets/valora-theme.css)
+Use the CSS tokens for the light and dark palettes, border radii, and spacing. The stylesheet also provides base styles for the page and financial cards. [Balsave theme CSS](assets/balsave-theme.css)
 
 ## Typography
 

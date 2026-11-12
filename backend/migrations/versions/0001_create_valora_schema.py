@@ -1,4 +1,4 @@
-"""Create the schema for Valora's application tables."""
+"""Create the schema for application tables."""
 
 from alembic import op
 

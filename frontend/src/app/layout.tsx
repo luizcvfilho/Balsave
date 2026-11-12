@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import logo from "../../../assets/valora.svg";
+import symbolDark from "../../../assets/balsave-symbol-dark.svg";
+import symbolLight from "../../../assets/balsave-symbol-light.svg";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/playfair-display/wght.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Valora",
+  title: "Balsave",
   description: "Controle, patrimônio e evolução.",
-  icons: { icon: logo.src },
+  icons: {
+    icon: [
+      { url: symbolLight.src, type: "image/svg+xml" },
+      { url: symbolDark.src, type: "image/svg+xml", media: "(prefers-color-scheme: dark)" },
+    ],
+  },
 };
 
 const systemTheme = `

@@ -1,10 +1,13 @@
+# Keep the project name so existing installations reuse their PostgreSQL volume.
 name: valora
+
+x-app-db-password: &app-db-password "${BALSAVE_DB_PASSWORD:-${VALORA_DB_PASSWORD:?Set BALSAVE_DB_PASSWORD in the .env file}}"
 
 services:
   proxy:
     image: caddy:2-alpine
     ports:
-      - "${VALORA_BIND_ADDRESS:-127.0.0.1}:${VALORA_PORT:-8080}:8080"
+      - "${BALSAVE_BIND_ADDRESS:-${VALORA_BIND_ADDRESS:-127.0.0.1}}:${BALSAVE_PORT:-${VALORA_PORT:-8080}}:8080"
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -43,7 +46,7 @@ services:
     build: ./backend
     environment:
       DB_HOST: db
-      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Set VALORA_DB_PASSWORD in the .env file}"
+      BALSAVE_DB_PASSWORD: *app-db-password
     networks:
       - default
       - database
@@ -63,14 +66,14 @@ services:
     environment:
       POSTGRES_DB: valora
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}"
-      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Set VALORA_DB_PASSWORD in the .env file}"
+      BALSAVE_DB_PASSWORD: *app-db-password
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./infra/postgres/01-create-app-role.sql:/docker-entrypoint-initdb.d/01-create-app-role.sql:ro
     networks:
       - database
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=\"$${VALORA_DB_PASSWORD}\" psql -w -h 127.0.0.1 -U valora_app -d valora -tAc 'SELECT 1' >/dev/null"]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${BALSAVE_DB_PASSWORD}\" psql -w -h 127.0.0.1 -U valora_app -d valora -tAc 'SELECT 1' >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 10

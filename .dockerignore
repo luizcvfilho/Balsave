@@ -1,8 +1,8 @@
 **
 !assets/
 assets/**
-!assets/valora.svg
-!assets/valora-theme.css
+!assets/balsave-*.svg
+!assets/balsave-theme.css
 !frontend/
 frontend/**
 !frontend/src/

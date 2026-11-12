@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 162 164" role="img" aria-label="Símbolo Balsave">
+<g>
+
+    <path d="M14 87 A67 67 0 0 1 148 87 C142 47 118 18 81 18 C44 18 20 47 14 87Z" fill="#A7CEB6"/>
+    <path d="M28 88 A53 53 0 0 1 134 88Z" fill="#101B18"/>
+    <path d="M47 91 V79 Q47 72 54 72 H64 Q71 72 71 79 V91Z" fill="#91D8AC"/>
+    <path d="M76 91 V62 Q76 55 83 55 H94 Q101 55 101 62 V91Z" fill="#91D8AC"/>
+    <path d="M106 91 V45 Q106 38 113 38 H124 Q131 38 131 45 V91Z" fill="#91D8AC"/>
+    <path d="M18 103 Q81 96 144 103 L138 116 Q82 123 27 114Z" fill="#75B494"/>
+    <path d="M32 124 Q82 134 135 121 Q108 156 79 156 Q51 156 32 124Z" fill="#D89476"/>
+    <path d="M29 118 Q82 132 140 115" stroke="#101B18" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+</g>
+</svg>

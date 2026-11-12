@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 180" role="img" aria-labelledby="title desc">
+  <title id="title">Balsave — logo principal</title>
+  <desc id="desc">Símbolo circular com três colunas ascendentes, formas de equilíbrio verdes e terracota, seguido de Balsave e sua assinatura.</desc>
+  <g transform="translate(18 14)">
+    <!-- Protection and balance arc -->
+    <path d="M14 87 A67 67 0 0 1 148 87 C142 47 118 18 81 18 C44 18 20 47 14 87Z" fill="#0D3B2E"/>
+    <path d="M28 88 A53 53 0 0 1 134 88Z" fill="#F7F4EE"/>
+    <!-- Financial growth -->
+    <path d="M47 91 V79 Q47 72 54 72 H64 Q71 72 71 79 V91Z" fill="#2E6B57"/>
+    <path d="M76 91 V62 Q76 55 83 55 H94 Q101 55 101 62 V91Z" fill="#2E6B57"/>
+    <path d="M106 91 V45 Q106 38 113 38 H124 Q131 38 131 45 V91Z" fill="#2E6B57"/>
+    <!-- Stable base and horizon -->
+    <path d="M18 103 Q81 96 144 103 L138 116 Q82 123 27 114Z" fill="#2E6B57"/>
+    <path d="M32 124 Q82 134 135 121 Q108 156 79 156 Q51 156 32 124Z" fill="#C66A4A"/>
+    <path d="M29 118 Q82 132 140 115" stroke="#F7F4EE" stroke-width="6" fill="none" stroke-linecap="round"/>
+  </g>
+  <path d="M193 43 V143" stroke="#BFC8BF" stroke-width="1.5"/>
+  <text x="218" y="104" font-family="Inter, Arial, sans-serif" font-size="65" font-weight="650" letter-spacing="-2.6" fill="#0D3B2E">Balsave</text>
+  <text x="222" y="138" font-family="Inter, Arial, sans-serif" font-size="20" letter-spacing="0.1" fill="#3A3A3A">controle, patrimônio e evolução</text>
+</svg>

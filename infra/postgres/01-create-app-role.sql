@@ -1,4 +1,4 @@
-\getenv app_password VALORA_DB_PASSWORD
+\getenv app_password BALSAVE_DB_PASSWORD
 
 CREATE ROLE valora_app LOGIN PASSWORD :'app_password';
 REVOKE CONNECT, TEMPORARY ON DATABASE valora FROM PUBLIC;
