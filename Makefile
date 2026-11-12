@@ -7,17 +7,17 @@ COMPOSE_DEV := $(COMPOSE) -f compose.dev.yaml
 
 help:
 	@printf '%-26s %s\n' \
-		'make env' 'Gera o .env local na primeira execução' \
-		'make dev' 'Sobe com recarga automática e acompanha os logs' \
-		'make up' 'Sobe o build de produção em segundo plano' \
-		'make build' 'Constrói as imagens da configuração base' \
-		'make migrate' 'Aplica as migrações pendentes do banco' \
-		'make down' 'Encerra a pilha e preserva o volume do banco' \
-		'make ps' 'Mostra o estado dos serviços' \
-		'make logs [SERVICE=backend]' 'Acompanha os logs de um serviço ou da pilha' \
-		'make config' 'Valida as duas configurações do Compose' \
-		'make health' 'Verifica a API e o banco pelo proxy' \
-		'make check' 'Roda lint e checagem de tipos do frontend'
+		'make env' 'Generate a local .env on the first run' \
+		'make dev' 'Start with automatic reloading and follow logs' \
+		'make up' 'Start the production build in the background' \
+		'make build' 'Build images from the base configuration' \
+		'make migrate' 'Apply pending database migrations' \
+		'make down' 'Stop the stack and keep the database volume' \
+		'make ps' 'Show service status' \
+		'make logs [SERVICE=backend]' 'Follow logs for one service or the entire stack' \
+		'make config' 'Validate both Compose configurations' \
+		'make health' 'Check the API and database through the proxy' \
+		'make check' 'Run frontend lint and type checks'
 
 env: .env
 

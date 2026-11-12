@@ -31,7 +31,7 @@ services:
     command: ["alembic", "upgrade", "head"]
     environment:
       DB_HOST: db
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}"
     networks:
       - database
     depends_on:
@@ -43,7 +43,7 @@ services:
     build: ./backend
     environment:
       DB_HOST: db
-      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Defina VALORA_DB_PASSWORD no arquivo .env}"
+      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Set VALORA_DB_PASSWORD in the .env file}"
     networks:
       - default
       - database
@@ -62,8 +62,8 @@ services:
     image: postgres:18-alpine
     environment:
       POSTGRES_DB: valora
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}"
-      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Defina VALORA_DB_PASSWORD no arquivo .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}"
+      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Set VALORA_DB_PASSWORD in the .env file}"
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./infra/postgres/01-create-app-role.sql:/docker-entrypoint-initdb.d/01-create-app-role.sql:ro

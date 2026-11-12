@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: O script é uma constante e aplica o tema antes da primeira renderização. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: The script is a constant and applies the theme before the initial render. */}
         <script dangerouslySetInnerHTML={{ __html: systemTheme }} />
       </head>
       <body>{children}</body>

@@ -1,34 +1,34 @@
 # Valora
 
-Aplicação web de finanças pessoais em pt-BR e BRL. A versão inicial apresenta um painel com dados fictícios.
+A personal finance web application in Brazilian Portuguese (pt-BR) that uses Brazilian reais (BRL). The initial version includes a dashboard with mock data.
 
-## Executar localmente
+## Run locally
 
-Use Make, Docker com o plugin Compose v2 e `openssl`. Na primeira execução, o Makefile gera um `.env` local com senhas distintas para a administração do PostgreSQL e para a API.
+Use Make, Docker with the Compose v2 plugin, and `openssl`. On the first run, the Makefile generates a local `.env` with separate passwords for the PostgreSQL administrator and the API.
 
 ```sh
 make dev
 ```
 
-`make dev` combina `compose.yaml` e `compose.dev.yaml` para ativar a recarga automática do frontend e da API. Abra o painel em <http://localhost:8080>. A API atende em `/api`, com documentação em `/api/docs`.
+`make dev` combines `compose.yaml` and `compose.dev.yaml` to enable automatic reloading for the frontend and API. Open the dashboard at <http://localhost:8080>. The API is available at `/api`, with documentation at `/api/docs`.
 
-| Comando | Uso |
+| Command | Purpose |
 | --- | --- |
-| `make up` | Subir o build de produção em segundo plano. |
-| `make migrate` | Aplicar as migrações pendentes do PostgreSQL. |
-| `make ps` | Ver o estado dos serviços. |
-| `make logs SERVICE=backend` | Acompanhar os logs da API. Use `make logs` para a pilha inteira. |
-| `make health` | Consultar `/api/ready` pelo Caddy e verificar a conexão com o banco. |
-| `make down` | Encerrar a pilha e preservar o volume `postgres_data`. |
-| `make help` | Listar os comandos disponíveis. |
+| `make up` | Start the production build in the background. |
+| `make migrate` | Apply pending PostgreSQL migrations. |
+| `make ps` | Show service status. |
+| `make logs SERVICE=backend` | Follow the API logs. Use `make logs` for the entire stack. |
+| `make health` | Request `/api/ready` through Caddy to check the database connection. |
+| `make down` | Stop the stack and keep the `postgres_data` volume. |
+| `make help` | List the available commands. |
 
-O PostgreSQL aplica as senhas na primeira inicialização do volume. Se precisar trocá-las depois, atualize também as senhas das funções no banco.
+PostgreSQL sets the passwords when it initializes the volume. If you change them later, update the role passwords in the database as well.
 
-Para conferir o protótipo no Safari do iPhone, defina `VALORA_BIND_ADDRESS=0.0.0.0` no `.env`, execute `make up` e abra `http://<IP-do-computador>:8080` no iPhone conectado à mesma rede. Use essa configuração com os dados fictícios do protótipo. A configuração padrão escuta apenas na interface local.
+To try the prototype in Safari on an iPhone, set `VALORA_BIND_ADDRESS=0.0.0.0` in `.env`, run `make up`, and open `http://<computer-ip>:8080` on an iPhone connected to the same network. Use this configuration with the prototype's mock data. By default, the application listens only on the loopback interface.
 
-## Verificações locais
+## Local checks
 
-Para verificar o frontend localmente com Node.js 24, rode os comandos abaixo a partir da raiz. Para sincronizar o ambiente do backend, use `cd backend && uv sync --locked` com Python 3.14.
+To check the frontend locally with Node.js 24, run the following commands from the repository root. To sync the backend environment with Python 3.14, run `cd backend && uv sync --locked`.
 
 ```sh
 npm --prefix frontend ci
@@ -36,35 +36,35 @@ make check
 npm --prefix frontend run build
 ```
 
-## Migrações do banco
+## Database migrations
 
-`make dev` e `make up` aguardam o PostgreSQL e aplicam as migrações do Alembic antes de iniciar a API. O serviço `migrate` usa a conta `postgres` para alterar a estrutura. A API usa `valora_app`, que recebe as permissões de acesso aos dados.
+`make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting the API. The `migrate` service uses the `postgres` role to make schema changes. The API uses the `valora_app` role, which has permissions to access application data.
 
-A primeira revisão cria o esquema `valora` para as tabelas da aplicação e dá à API permissão para acessar esse esquema. As revisões ficam em `backend/migrations/versions/`. Para criar uma revisão a partir da raiz e aplicá-la após editar o arquivo gerado, use os comandos abaixo.
+The first revision creates the `valora` schema for application tables and grants the API access to that schema. Revisions live in `backend/migrations/versions/`. Run the following commands from the repository root to create a revision and apply it after editing the generated file.
 
 ```sh
-(cd backend && uv run --locked alembic revision -m "descreva a mudança")
-# Edite a revisão gerada antes de aplicar.
+(cd backend && uv run --locked alembic revision -m "describe the change")
+# Edit the generated revision before applying it.
 make migrate
 ```
 
-## Conectar suas contas com o Meu Pluggy
+## Connect your accounts with Meu Pluggy
 
-1. Entre no Meu Pluggy, adicione o banco e autorize o acesso. [Guia do Meu Pluggy](https://meu.pluggy.ai/api-guide)
-2. Entre no Dashboard da Pluggy com a mesma conta. Em **Aplicações → sua aplicação → Demo**, selecione **Conectar conta → MeuPluggy** e autorize o acesso às conexões existentes. Se você personalizou os conectores disponíveis, habilite **MeuPluggy** na seção **Direct Connectors** do grupo **Pessoal**. [Configuração no Dashboard](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
-3. Na seção **Itens conectados**, copie o `itemId` de cada banco. Use o Client ID e o Client Secret da mesma aplicação que recebeu os itens.
-4. A partir da raiz do Valora, rode o comando e informe as credenciais da aplicação quando solicitado. Substitua `ITEM_ID` pelo ID copiado e repita para cada banco. Se `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` já estiverem no `.env` local, acrescente `--env-file ../.env` após `--locked`.
+1. Sign in to Meu Pluggy, add your bank, and authorize access. [Meu Pluggy guide](https://meu.pluggy.ai/api-guide)
+2. Sign in to the Pluggy Dashboard with the same account. Under **Aplicações**, open your application and go to **Demo**. Select **Conectar conta → MeuPluggy** and authorize access to your existing connections. If you customized the available connectors, enable **MeuPluggy** under **Direct Connectors** in the **Pessoal** group. [Dashboard setup](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
+3. In the **Itens conectados** section, copy the `itemId` for each bank. Use the Client ID and Client Secret from the application that received the items.
+4. From the Valora repository root, run the commands below and enter the application credentials when prompted. Replace `ITEM_ID` with the copied ID and repeat for each bank. If your local `.env` already contains `PLUGGY_CLIENT_ID` and `PLUGGY_CLIENT_SECRET`, add `--env-file ../.env` after `--locked`.
 
 ```sh
 cd backend
 uv run --locked python -m app.pluggy --meu-pluggy ITEM_ID
 ```
 
-Após o vínculo inicial, o comando consulta a API diretamente. Ele mostra a quantidade de transações e os campos e tipos encontrados, sem exibir os lançamentos nem gravar no PostgreSQL. A autorização da aplicação dura um ano. Ao renovar, confira o `itemId` da conexão antes de repetir o comando. [Validade e renovação](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
+After the initial setup, the command queries the API directly, processes the data in memory, and reports only the transaction count, field names, and data types. Application authorization lasts one year. After renewing it, check the connection's `itemId` before running the command again. [Authorization and renewal](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
 
-## Explorar dados de teste da Pluggy
+## Explore Pluggy test data
 
-Crie uma aplicação de desenvolvimento e preencha `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` no `.env` local da raiz. Também é possível omitir `--env-file ../.env` e informar as credenciais no terminal. [Credenciais da aplicação](https://docs.pluggy.ai/en/docs/integration-checklist/api-keys)
+Create a development application and set `PLUGGY_CLIENT_ID` and `PLUGGY_CLIENT_SECRET` in the local `.env` at the repository root. You can also omit `--env-file ../.env` and enter the credentials in the terminal. [Application credentials](https://docs.pluggy.ai/en/docs/integration-checklist/api-keys)
 
 ```sh
 cd backend
@@ -72,14 +72,14 @@ uv run --locked --env-file ../.env python -m app.pluggy --check-auth
 uv run --locked --env-file ../.env python -m app.pluggy --create-sandbox
 ```
 
-O primeiro comando autentica com as credenciais da aplicação. O segundo cria ou reutiliza uma conexão fictícia **Pluggy Bank** pela API e mostra os tipos de conta, a quantidade de transações e os campos observados em todas as páginas. Guarde o `itemId` exibido no terminal para repetir a consulta, passando `ITEM_ID` no lugar de `--create-sandbox`. [Criação de itens pela API](https://docs.pluggy.ai/en/reference/items/items-create) · [Sandbox](https://docs.pluggy.ai/en/docs/guides/sandbox)
+The first command authenticates with the application credentials. The second creates or reuses a mock **Pluggy Bank** connection through the API and reports account types, transaction counts, and the fields observed across all pages. Save the `itemId` printed in the terminal and pass it as `ITEM_ID` in place of `--create-sandbox` to repeat the query. [Create items through the API](https://docs.pluggy.ai/en/reference/items/items-create) · [Sandbox](https://docs.pluggy.ai/en/docs/guides/sandbox)
 
-No plano gratuito, a Pluggy exige o **Connect Widget** para criar itens. Depois de obter o `itemId` do item Sandbox conectado pelo widget, passe esse ID ao comando para consultar a API com as mesmas credenciais. [Regras de criação de itens](https://docs.pluggy.ai/en/reference/error-codes)
+On the free plan, Pluggy requires the **Connect Widget** to create items. After connecting a sandbox item through the widget, pass its `itemId` to the command to query the API with the same credentials. [Item creation rules](https://docs.pluggy.ai/en/reference/error-codes)
 
-Para o esquema, use IDs próprios para contas e lançamentos do Valora e reserve vínculos para os IDs importados da Pluggy. Modele moeda e valor exato e considere a direção (`type`) e o estado (`status`) de cada movimento. Uma compra no cartão pode ter valor positivo e ser um débito. A presença dos campos varia conforme a instituição e o tipo de conta. [Contas](https://docs.pluggy.ai/en/docs/products/accounts) · [Transações](https://docs.pluggy.ai/en/docs/products/transactions)
+In the database schema, assign Valora's own IDs to accounts and transactions and store the imported Pluggy IDs as references. Store the currency and exact amount, and account for each transaction's direction (`type`) and state (`status`). A card purchase can have a positive amount and still be a debit. The available fields vary by institution and account type. [Accounts](https://docs.pluggy.ai/en/docs/products/accounts) · [Transactions](https://docs.pluggy.ai/en/docs/products/transactions)
 
-## Estrutura
+## Project structure
 
-- `frontend/src/app/` contém as rotas, o layout e o CSS do painel em Next.js App Router, TypeScript e Tailwind. As configurações e o `package.json` ficam na raiz de `frontend/`. Os tokens e o logo são compartilhados a partir de `assets/`.
-- `backend/` contém a API FastAPI, a conexão PostgreSQL via Psycopg e as migrações Alembic. As dependências são fixadas em `uv.lock`.
-- `infra/` contém a configuração do Caddy e a inicialização da função PostgreSQL da API. O proxy é o único serviço com porta publicada e encaminha a interface e `/api` na mesma origem.
+- `frontend/src/app/` contains the dashboard routes, layout, and CSS built with the Next.js App Router, TypeScript, and Tailwind. Configuration files and `package.json` live at the root of `frontend/`. The shared theme tokens and logo live in `assets/`.
+- `backend/` contains the FastAPI application, the PostgreSQL connection through Psycopg, and the Alembic migrations. The `uv.lock` file pins backend dependencies.
+- `infra/` contains the Caddy configuration and the initialization script for the API's PostgreSQL role. The proxy is the only service with a published port and serves the frontend and `/api` from the same origin.

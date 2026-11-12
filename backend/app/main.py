@@ -29,6 +29,6 @@ def readiness() -> dict[str, str]:
         ) as connection:
             connection.execute("SELECT 1")
     except (KeyError, psycopg.Error):
-        raise HTTPException(status_code=503, detail="Banco de dados indisponível") from None
+        raise HTTPException(status_code=503, detail="Database unavailable") from None
 
     return {"status": "ready"}

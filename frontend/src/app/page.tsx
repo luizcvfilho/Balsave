@@ -63,9 +63,9 @@ export default function Dashboard() {
         </dl>
 
         <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <section className="financial-card" id="lancamentos" aria-labelledby="lancamentos-title">
-            <h2 id="lancamentos-title">Lançamentos recentes</h2>
-            {/* biome-ignore lint/a11y/noRedundantRoles: Preserva a semântica no Safari com os marcadores ocultos. */}
+          <section className="financial-card" id="lancamentos" aria-labelledby="transactions-title">
+            <h2 id="transactions-title">Lançamentos recentes</h2>
+            {/* biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when list markers are hidden. */}
             <ul className="transaction-list" role="list">
               {[...transactions].reverse().map(({ name, category, date, amount }) => (
                 <li key={name}>
@@ -80,9 +80,9 @@ export default function Dashboard() {
           </section>
 
           <div className="grid gap-5">
-            <section className="financial-card" aria-labelledby="categorias-title">
-              <h2 id="categorias-title">Despesas por categoria</h2>
-              {/* biome-ignore lint/a11y/noRedundantRoles: Preserva a semântica no Safari com os marcadores ocultos. */}
+            <section className="financial-card" aria-labelledby="categories-title">
+              <h2 id="categories-title">Despesas por categoria</h2>
+              {/* biome-ignore lint/a11y/noRedundantRoles: Preserve list semantics in Safari when list markers are hidden. */}
               <ul className="category-list" role="list">
                 {categories.map(({ category, total }) => (
                   <li key={category}>
@@ -98,8 +98,8 @@ export default function Dashboard() {
               </ul>
             </section>
 
-            <section className="financial-card" id="reembolsos" aria-labelledby="reembolsos-title">
-              <h2 id="reembolsos-title">Reembolsos</h2>
+            <section className="financial-card" id="reembolsos" aria-labelledby="refunds-title">
+              <h2 id="refunds-title">Reembolsos</h2>
               <p className="mt-3 font-medium">Hotel</p>
               <dl className="refund-list">
                 <div>

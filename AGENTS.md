@@ -123,6 +123,11 @@ The dashboard should prioritize:
 
 ## Engineering Guidelines
 
+- Write the README and all technical text in English, including code comments,
+  docstrings, API diagnostics, logs, and developer CLI messages.
+- Write application UI copy in Brazilian Portuguese (pt-BR), including
+  accessibility labels and messages displayed to users. Quote interface labels
+  as displayed when documenting navigation.
 - Prefer simple, maintainable solutions.
 - Use reusable components.
 - Separate business logic from UI components.

@@ -1,11 +1,11 @@
 /docs/PLANO.md
 
-# Credenciais locais
+# Local credentials
 .env
 .env.*
 !.env.example
 
-# Next.js e TypeScript
+# Next.js and TypeScript
 node_modules/
 .next/
 next-env.d.ts
