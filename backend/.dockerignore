@@ -1,0 +1,11 @@
+**
+!pyproject.toml
+!uv.lock
+!alembic.ini
+!app/
+app/**
+!app/**/*.py
+!migrations/
+migrations/**
+!migrations/**/*.py
+!migrations/script.py.mako

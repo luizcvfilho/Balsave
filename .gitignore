@@ -1,0 +1,17 @@
+/docs/PLANO.md
+
+# Credenciais locais
+.env
+.env.*
+!.env.example
+
+# Next.js e TypeScript
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]

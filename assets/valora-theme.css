@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light;
+
+  --background: #F7F4EE;
+  --surface: #FFFFFF;
+  --surface-muted: #E9EEE7;
+
+  --primary: #0D3B2E;
+  --secondary: #2E6B57;
+  --accent: #C66A4A;
+
+  --text-primary: #252B27;
+  --text-secondary: #53665B;
+  --border: #D6D9D0;
+
+  --positive: #28714F;
+  --negative: #A8443F;
+
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --space-unit: 4px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: #101B18;
+  --surface: #1C2A24;
+  --surface-muted: #284036;
+
+  --primary: #A7CEB6;
+  --secondary: #75B494;
+  --accent: #D89476;
+
+  --text-primary: #F2F1EB;
+  --text-secondary: #AFC0B4;
+  --border: #34483E;
+
+  --positive: #91D8AC;
+  --negative: #F09A8E;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.financial-card {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  padding: 20px;
+}

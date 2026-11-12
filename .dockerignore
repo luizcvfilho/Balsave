@@ -1,0 +1,16 @@
+**
+!assets/
+assets/**
+!assets/valora.svg
+!assets/valora-theme.css
+!frontend/
+frontend/**
+!frontend/src/
+!frontend/src/**
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/next.config.mjs
+!frontend/postcss.config.mjs
+!frontend/tsconfig.json
+**/.env
+**/.env.*

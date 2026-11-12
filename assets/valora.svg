@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 100 100"
+     fill="none">
+  <title>Valora</title>
+  <circle
+    cx="50" cy="50" r="39"
+    stroke="#0D3B2E"
+    stroke-width="6"
+    stroke-dasharray="182 63"
+    transform="rotate(-130 50 50)"
+  />
+  <path
+    d="M25 31 L49 73 L76 27"
+    stroke="#0D3B2E"
+    stroke-width="10"
+    stroke-linejoin="miter"
+  />
+  <path
+    d="M82 67 A39 39 0 0 1 63 87"
+    stroke="#C66A4A"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+</svg>

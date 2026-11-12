@@ -1,0 +1,12 @@
+services:
+  frontend:
+    build:
+      target: development
+    volumes:
+      - ./frontend/src:/app/frontend/src:ro
+      - ./assets:/app/assets:ro
+
+  backend:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]
+    volumes:
+      - ./backend/app:/app/app:ro

@@ -1,0 +1,85 @@
+name: valora
+
+services:
+  proxy:
+    image: caddy:2-alpine
+    ports:
+      - "${VALORA_BIND_ADDRESS:-127.0.0.1}:${VALORA_PORT:-8080}:8080"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DB_HOST: db
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}"
+    networks:
+      - database
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build: ./backend
+    environment:
+      DB_HOST: db
+      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Defina VALORA_DB_PASSWORD no arquivo .env}"
+    networks:
+      - default
+      - database
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/ready', timeout=4).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: valora
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}"
+      VALORA_DB_PASSWORD: "${VALORA_DB_PASSWORD:?Defina VALORA_DB_PASSWORD no arquivo .env}"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./infra/postgres/01-create-app-role.sql:/docker-entrypoint-initdb.d/01-create-app-role.sql:ro
+    networks:
+      - database
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${VALORA_DB_PASSWORD}\" psql -w -h 127.0.0.1 -U valora_app -d valora -tAc 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  database:
+    internal: true
+
+volumes:
+  postgres_data:
