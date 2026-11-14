@@ -16,28 +16,54 @@
   --positive: #28714F;
   --negative: #A8443F;
 
+  --pace-below: #286591;
+  --pace-above: #A64F38;
+  --chart-reference: #606967;
+
+  --category-housing: #AB5942;
+  --category-food: #357456;
+  --category-transport: #3C6EA1;
+  --category-health: #805C9A;
+  --category-leisure: #8C671F;
+  --category-travel: #117877;
+  --category-other: #6C7279;
+
   --radius-card: 16px;
   --radius-button: 12px;
   --space-unit: 4px;
 }
 
-[data-theme="dark"] {
-  color-scheme: dark;
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
 
-  --background: #101B18;
-  --surface: #1C2A24;
-  --surface-muted: #284036;
+    --background: #101B18;
+    --surface: #1C2A24;
+    --surface-muted: #284036;
 
-  --primary: #A7CEB6;
-  --secondary: #75B494;
-  --accent: #D89476;
+    --primary: #A7CEB6;
+    --secondary: #75B494;
+    --accent: #D89476;
 
-  --text-primary: #F2F1EB;
-  --text-secondary: #AFC0B4;
-  --border: #34483E;
+    --text-primary: #F2F1EB;
+    --text-secondary: #AFC0B4;
+    --border: #34483E;
 
-  --positive: #91D8AC;
-  --negative: #F09A8E;
+    --positive: #91D8AC;
+    --negative: #F09A8E;
+
+    --pace-below: #79BCF2;
+    --pace-above: #F0A187;
+    --chart-reference: #B1B9B6;
+
+    --category-housing: #E78D73;
+    --category-food: #80C59A;
+    --category-transport: #79AFE8;
+    --category-health: #BF9AD9;
+    --category-leisure: #D7B66C;
+    --category-travel: #55C1BB;
+    --category-other: #AEB6C0;
+  }
 }
 
 body {

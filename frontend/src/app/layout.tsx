@@ -1,8 +1,11 @@
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import type { Metadata } from "next";
 import symbolDark from "../../../assets/balsave-symbol-dark.svg";
 import symbolLight from "../../../assets/balsave-symbol-light.svg";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/playfair-display/wght.css";
+import { Header } from "../components/layout/header";
+import { BalsaveThemeProvider } from "../theme/theme-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,21 +19,17 @@ export const metadata: Metadata = {
   },
 };
 
-const systemTheme = `
-  const theme = window.matchMedia('(prefers-color-scheme: dark)');
-  const apply = () => { document.documentElement.dataset.theme = theme.matches ? 'dark' : 'light'; };
-  apply();
-  theme.addEventListener('change', apply);
-`;
-
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: The script is a constant and applies the theme before the initial render. */}
-        <script dangerouslySetInnerHTML={{ __html: systemTheme }} />
-      </head>
-      <body>{children}</body>
+    <html lang="pt-BR">
+      <body>
+        <AppRouterCacheProvider options={{ enableCssLayer: true }}>
+          <BalsaveThemeProvider>
+            <Header />
+            {children}
+          </BalsaveThemeProvider>
+        </AppRouterCacheProvider>
+      </body>
     </html>
   );
 }

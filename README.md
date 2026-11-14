@@ -33,8 +33,14 @@ To check the frontend locally with Node.js 24, run the following commands from t
 ```sh
 npm --prefix frontend ci
 make check
+npm --prefix frontend exec -- playwright install chromium
+npm --prefix frontend test
 npm --prefix frontend run build
 ```
+
+The dashboard uses a reproducible snapshot in [`frontend/src/data/mock-data.ts`](frontend/src/data/mock-data.ts). Edit that file to change the bank accounts, card limits, monthly balances, or transactions. Mock amounts use integer cents, and the reporting date is a calendar date in `America/Sao_Paulo`.
+
+“Ritmo de gastos” and “Gastos por categoria” share the same net expense calculation. Expenses are categorized from their merchant type, and linked refunds reduce the original expense as of the reporting date. The daily comparison uses the previous three calendar months. For shorter months, it carries their closing total forward to the remaining days. The balance chart uses month-end snapshots and the latest balance for the open month.
 
 ## Database migrations
 
@@ -122,6 +128,8 @@ In the database schema, assign Balsave's own IDs to accounts and transactions an
 
 ## Project structure
 
-- `frontend/src/app/` contains the dashboard routes, layout, and CSS built with the Next.js App Router, TypeScript, and Tailwind. Configuration files and `package.json` live at the root of `frontend/`. The shared theme tokens and light and dark brand assets live in `assets/`.
+- `frontend/src/app/` defines the Next.js App Router routes and shared layout. Route entries render screens from `frontend/src/ui/pages/`. Place additional screens there and give each one a route entry under `src/app/`.
+- `frontend/src/components/` contains the shared Header, cards, charts, and dashboard sections. `frontend/src/theme/` configures Material UI with the Balsave fonts and system color scheme. Shared brand assets and CSS tokens live in `assets/`.
+- `frontend/src/data/` contains mock records. `frontend/src/lib/` contains financial calculations and locale formatting. `frontend/tests/` contains TypeScript Playwright specs for both calculations and browser behavior.
 - `backend/` contains the FastAPI application, the PostgreSQL connection through Psycopg, and the Alembic migrations. The `uv.lock` file pins backend dependencies.
 - `infra/` contains the Caddy configuration and the initialization script for the API's PostgreSQL role. The proxy is the only service with a published port and serves the frontend and `/api` from the same origin.
