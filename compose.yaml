@@ -1,13 +1,12 @@
-# Keep the project name so existing installations reuse their PostgreSQL volume.
-name: valora
+name: balsave
 
-x-app-db-password: &app-db-password "${BALSAVE_DB_PASSWORD:-${VALORA_DB_PASSWORD:?Set BALSAVE_DB_PASSWORD in the .env file}}"
+x-app-db-password: &app-db-password "${BALSAVE_DB_PASSWORD:?Set BALSAVE_DB_PASSWORD in the .env file}"
 
 services:
   proxy:
     image: caddy:2-alpine
     ports:
-      - "${BALSAVE_BIND_ADDRESS:-${VALORA_BIND_ADDRESS:-127.0.0.1}}:${BALSAVE_PORT:-${VALORA_PORT:-8080}}:8080"
+      - "${BALSAVE_BIND_ADDRESS:-127.0.0.1}:${BALSAVE_PORT:-8080}:8080"
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
@@ -64,7 +63,7 @@ services:
   db:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: valora
+      POSTGRES_DB: balsave
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}"
       BALSAVE_DB_PASSWORD: *app-db-password
     volumes:
@@ -73,7 +72,7 @@ services:
     networks:
       - database
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=\"$${BALSAVE_DB_PASSWORD}\" psql -w -h 127.0.0.1 -U valora_app -d valora -tAc 'SELECT 1' >/dev/null"]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${BALSAVE_DB_PASSWORD}\" psql -w -h 127.0.0.1 -U balsave_app -d balsave -tAc 'SELECT 1' >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -86,3 +85,4 @@ networks:
 
 volumes:
   postgres_data:
+    name: "${BALSAVE_POSTGRES_VOLUME:-${COMPOSE_PROJECT_NAME}_postgres_data}"

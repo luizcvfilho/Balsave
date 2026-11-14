@@ -26,8 +26,6 @@ PostgreSQL sets the passwords when it initializes the volume. If you change them
 
 To try the prototype in Safari on an iPhone, set `BALSAVE_BIND_ADDRESS=0.0.0.0` in `.env`, run `make up`, and open `http://<computer-ip>:8080` on an iPhone connected to the same network. Use this configuration with the prototype's mock data. By default, the application listens only on the loopback interface.
 
-Existing `.env` files still work. If you update one, rename `VALORA_BIND_ADDRESS`, `VALORA_PORT`, and `VALORA_DB_PASSWORD` to `BALSAVE_BIND_ADDRESS`, `BALSAVE_PORT`, and `BALSAVE_DB_PASSWORD` and keep the existing values. The Compose project retains the `valora` identifier so Docker continues to use the same PostgreSQL volume.
-
 ## Local checks
 
 To check the frontend locally with Node.js 24, run the following commands from the repository root. To sync the backend environment with Python 3.14, run `cd backend && uv sync --locked`.
@@ -40,15 +38,57 @@ npm --prefix frontend run build
 
 ## Database migrations
 
-`make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting the API. The `migrate` service uses the `postgres` role to make schema changes. The API uses the `valora_app` role, which has permissions to access application data.
+`make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting the API. The `migrate` service uses the `postgres` role to make schema changes. The API uses the `balsave_app` role, which has permissions to access application data.
 
-The first revision creates the `valora` schema for application tables and grants the API access to that schema. Revisions live in `backend/migrations/versions/`. Run the following commands from the repository root to create a revision and apply it after editing the generated file.
+Revision `0001` creates the `balsave` schema and its initial tables. Revision `0002` installs those same tables in databases that already applied the original, schema-only version of `0001`. Run `make migrate` to apply pending revisions.
+
+Open the [interactive database diagram](docs/database/schema.html) locally.
+
+| Table | Purpose |
+| --- | --- |
+| `users` | Internal owners of financial records. |
+| `accounts` | Bank accounts and credit cards, with optional external references. |
+| `categories` | User-defined labels for transactions. |
+| `transactions` | Dated entries with an exact amount, currency, direction, status and kind. |
+| `refunds` | Links a posted refund credit to one original expense, which can receive multiple partial refunds. |
+
+Composite foreign keys prevent accounts, categories and refund links from referencing another user's records. The API role has table-level data permissions. Private endpoints will also need to enforce user authorization.
+
+Transaction amounts use `numeric(20,6)` and a separate debit or credit direction. Read amounts as `Decimal` in Python. Preserve source dates that have no time component and convert timestamps to `America/Sao_Paulo` before assigning an `occurred_on` date. For reporting, sum posted entries by currency. Count card bill payments as transfers and linked refunds against the original expense. PostgreSQL checks that both entries are posted, have the same currency, and that their total refunds do not exceed the original amount, including during concurrent writes.
+
+External account IDs are unique per user and provider. External transaction IDs are unique per account. An importer can upsert on these keys and preserve user categorization. The dashboard still uses mock data.
+
+Revisions live in `backend/migrations/versions/`. Run the following commands from the repository root to create a revision and apply it after editing the generated file.
 
 ```sh
 (cd backend && uv run --locked alembic revision -m "describe the change")
 # Edit the generated revision before applying it.
 make migrate
 ```
+
+To run the refund integration tests, set `BALSAVE_TEST_DATABASE_URL` to the migration role's connection URL for a disposable PostgreSQL database migrated to `head`. Run the following command from the repository root.
+
+```sh
+(cd backend && uv run --locked python -m unittest discover -s tests -v)
+```
+
+### Upgrade a volume from the previous project name
+
+If you have an existing `valora_postgres_data` volume, back it up and rename the `VALORA_BIND_ADDRESS`, `VALORA_PORT`, and `VALORA_DB_PASSWORD` keys in `.env` to their `BALSAVE_` equivalents. Keep the existing values and add `BALSAVE_POSTGRES_VOLUME=valora_postgres_data` so the renamed project keeps using that volume.
+
+From the repository root, stop the old stack and run the one-time database rename. The volume check ensures the commands target an existing volume.
+
+```sh
+docker volume inspect valora_postgres_data >/dev/null &&
+docker compose -p valora down &&
+docker compose run -d --rm --name balsave-rename-db db
+docker exec -it balsave-rename-db pg_isready -U postgres -d postgres
+docker exec -i balsave-rename-db psql -X -U postgres -d postgres < infra/postgres/upgrade-legacy.sql &&
+docker stop balsave-rename-db &&
+make migrate
+```
+
+Run the `psql` command once `pg_isready` reports that the server is accepting connections. The SQL renames the database, schema and API role in the existing volume.
 
 ## Connect your accounts with Meu Pluggy
 

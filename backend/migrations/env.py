@@ -21,7 +21,7 @@ def run_migrations_online() -> None:
         username="postgres",
         password=os.environ["POSTGRES_PASSWORD"],
         host=os.getenv("DB_HOST", "localhost"),
-        database="valora",
+        database="balsave",
     )
     engine = create_engine(
         url,
@@ -33,7 +33,7 @@ def run_migrations_online() -> None:
     with engine.connect() as connection:
         # Serialize migrations from Compose startup and manual runs. Closing the
         # physical connection releases the session lock, including on failure.
-        connection.execute(text("SELECT pg_advisory_lock(hashtext('valora:alembic'))"))
+        connection.execute(text("SELECT pg_advisory_lock(hashtext('balsave:alembic'))"))
         connection.commit()
 
         context.configure(connection=connection)

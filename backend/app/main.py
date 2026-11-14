@@ -21,9 +21,9 @@ def readiness() -> dict[str, str]:
     try:
         with psycopg.connect(
             host=os.getenv("DB_HOST", "localhost"),
-            dbname="valora",
-            user="valora_app",
-            password=os.environ.get("BALSAVE_DB_PASSWORD") or os.environ["VALORA_DB_PASSWORD"],
+            dbname="balsave",
+            user="balsave_app",
+            password=os.environ["BALSAVE_DB_PASSWORD"],
             connect_timeout=3,
             options="-c statement_timeout=3000",
         ) as connection:
