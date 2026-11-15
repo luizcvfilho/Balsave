@@ -20,8 +20,11 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    environment:
+      BALSAVE_PREVIEW_PASSWORD: "${BALSAVE_PREVIEW_PASSWORD:-}"
+      BALSAVE_BACKEND_URL: http://backend:8000
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000', { redirect: 'manual' }).then(r => { if (!r.ok && r.status !== 307) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -46,6 +49,9 @@ services:
     environment:
       DB_HOST: db
       BALSAVE_DB_PASSWORD: *app-db-password
+      BALSAVE_PREVIEW_PASSWORD: "${BALSAVE_PREVIEW_PASSWORD:-}"
+      PLUGGY_CLIENT_ID: "${PLUGGY_CLIENT_ID:-}"
+      PLUGGY_CLIENT_SECRET: "${PLUGGY_CLIENT_SECRET:-}"
     networks:
       - default
       - database

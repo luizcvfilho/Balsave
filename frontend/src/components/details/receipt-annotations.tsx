@@ -17,6 +17,7 @@ function subscribe(callback: () => void) {
 }
 
 const emptySnapshot = () => "{}";
+const ignoreChanges = () => () => {};
 
 function storageSnapshot() {
   try {
@@ -40,8 +41,12 @@ function parseAnnotations(snapshot: string): Record<string, Annotation> {
   }
 }
 
-export function useReceiptAnnotations() {
-  const snapshot = useSyncExternalStore(subscribe, storageSnapshot, emptySnapshot);
+export function useReceiptAnnotations(enabled = true) {
+  const snapshot = useSyncExternalStore(
+    enabled ? subscribe : ignoreChanges,
+    enabled ? storageSnapshot : emptySnapshot,
+    emptySnapshot,
+  );
   return parseAnnotations(snapshot);
 }
 

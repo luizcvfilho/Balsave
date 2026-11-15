@@ -5,6 +5,7 @@ import symbolLight from "../../../assets/balsave-symbol-light.svg";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/playfair-display/wght.css";
 import { Header } from "../components/layout/header";
+import { hasPreviewSession } from "../data/preview-session";
 import { BalsaveThemeProvider } from "../theme/theme-provider";
 import "./globals.css";
 
@@ -19,13 +20,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const signedIn = await hasPreviewSession();
   return (
     <html lang="pt-BR">
       <body>
         <AppRouterCacheProvider options={{ enableCssLayer: true }}>
           <BalsaveThemeProvider>
-            <Header />
+            <Header signedIn={signedIn} />
             {children}
           </BalsaveThemeProvider>
         </AppRouterCacheProvider>

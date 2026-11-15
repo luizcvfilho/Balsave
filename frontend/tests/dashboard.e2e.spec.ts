@@ -6,7 +6,7 @@ test("shows shared navigation and updates spending charts independently", async 
   await page.goto("/");
   const header = page.getByRole("banner");
   await expect(header.getByRole("link", { name: "Balsave, início" })).toHaveAttribute("href", "/");
-  await expect(header.getByRole("link")).toHaveCount(1);
+  await expect(header.getByRole("link", { name: "Conectar bancos" })).toHaveAttribute("href", "/conexoes");
   await expect(page.getByRole("heading", { name: "Lançamentos recentes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toHaveCount(0);
 

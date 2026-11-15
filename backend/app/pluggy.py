@@ -12,7 +12,7 @@ from getpass import GetPassWarning, getpass
 from http.client import HTTPException, HTTPSConnection
 from time import monotonic, sleep
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode
 from uuid import UUID
 
 
@@ -93,6 +93,8 @@ def transactions(account_id: str, api_key: str) -> Iterator[dict[str, Any]]:
             return
         if not isinstance(next_query, str) or not next_query.startswith("?"):
             raise PluggyError("Pluggy returned an invalid transaction cursor.")
+        if parse_qs(next_query[1:]).get("accountId") != [account_id]:
+            raise PluggyError("Pluggy returned a transaction cursor for another account.")
         query = next_query
 
 
@@ -164,9 +166,8 @@ def sandbox_item(item_id: UUID, api_key: str, *, wait: bool) -> dict[str, Any]:
 
 
 def inspect_accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
-    accounts = request("/accounts?" + urlencode({"itemId": item_id}), api_key=api_key)
     account_reports = []
-    for account in results(accounts):
+    for account in accounts(item_id, api_key):
         account_id = account.get("id")
         if not isinstance(account_id, str) or not account_id:
             raise PluggyError("Pluggy returned an account without an ID.")
@@ -179,12 +180,25 @@ def inspect_accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
     return account_reports
 
 
+def accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
+    return results(request("/accounts?" + urlencode({"itemId": item_id}), api_key=api_key))
+
+
 def inspect_sandbox(item_id: UUID, api_key: str, *, wait: bool = False) -> dict[str, Any]:
     item = sandbox_item(item_id, api_key, wait=wait)
     return {"executionStatus": item.get("executionStatus"), "accounts": inspect_accounts(item_id, api_key)}
 
 
 def inspect_meu_pluggy(item_id: UUID, api_key: str) -> dict[str, Any]:
+    item = meu_pluggy_item(item_id, api_key)
+    return {
+        "executionStatus": item.get("executionStatus"),
+        "consentExpiresAt": item.get("consentExpiresAt"),
+        "accounts": inspect_accounts(item_id, api_key),
+    }
+
+
+def meu_pluggy_item(item_id: UUID, api_key: str) -> dict[str, Any]:
     item = request(f"/items/{item_id}", api_key=api_key)
     connector = item.get("connector")
     if not isinstance(connector, dict) or connector.get("id") != MEU_PLUGGY_CONNECTOR_ID:
@@ -197,18 +211,14 @@ def inspect_meu_pluggy(item_id: UUID, api_key: str) -> dict[str, Any]:
         try:
             expiration = datetime.fromisoformat(consent_expires_at)
             expired = expiration <= datetime.now(UTC)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             raise PluggyError("Pluggy returned an invalid consent expiration date.") from None
     if expired:
         raise PluggyError("Consent has expired. Reconnect MeuPluggy in the Dashboard and check the new itemId.")
     if item.get("status") != "UPDATED":
         raise PluggyError("The Meu Pluggy item is still unavailable. Check the connection in the Dashboard.")
 
-    return {
-        "executionStatus": item.get("executionStatus"),
-        "consentExpiresAt": consent_expires_at,
-        "accounts": inspect_accounts(item_id, api_key),
-    }
+    return item
 
 
 def main() -> None:

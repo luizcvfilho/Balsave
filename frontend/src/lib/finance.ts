@@ -6,8 +6,8 @@ export type AccountBalance = {
 export type CreditCard = {
   bank: string;
   lastFour: string;
-  usedCents: number;
-  limitCents: number;
+  usedCents: number | null;
+  limitCents: number | null;
 };
 
 export type Transaction = {
@@ -18,9 +18,10 @@ export type Transaction = {
   accountId?: string;
   cardId?: string;
 } & (
-  | { kind: "expense"; merchantType?: string; expectsRefund?: boolean }
+  | { kind: "expense"; merchantType?: string; category?: string; expectsRefund?: boolean }
   | { kind: "refund"; expenseId: string }
   | { kind: "income" }
+  | { kind: "credit" }
   | { kind: "transfer"; direction?: "in" | "out" }
 );
 
@@ -31,11 +32,12 @@ export const transactionKindLabels = {
   expense: "Despesa",
   income: "Receita",
   refund: "Reembolso",
+  credit: "Crédito",
   transfer: "Transferência",
 } satisfies Record<Transaction["kind"], string>;
 
 export function isIncoming(transaction: Transaction) {
-  return transaction.kind === "income" || transaction.kind === "refund"
+  return transaction.kind === "income" || transaction.kind === "refund" || transaction.kind === "credit"
     || (transaction.kind === "transfer" && transaction.direction === "in");
 }
 
@@ -54,11 +56,13 @@ const categoriesByMerchantType: ReadonlyMap<string, string> = new Map([
 export function transactionCategory(transaction: Transaction) {
   switch (transaction.kind) {
     case "expense":
-      return categoriesByMerchantType.get(transaction.merchantType ?? "") ?? "Sem categoria";
+      return transaction.category ?? categoriesByMerchantType.get(transaction.merchantType ?? "") ?? "Sem categoria";
     case "income":
       return "Receitas";
     case "refund":
       return "Reembolso";
+    case "credit":
+      return "Crédito";
     case "transfer":
       return "Transferência";
   }
@@ -81,10 +85,10 @@ export function summarizeBalances(accounts: readonly AccountBalance[]) {
 export function summarizeCards(cards: readonly CreditCard[]) {
   return cards.reduce(
     (totals, card) => ({
-      usedCents: totals.usedCents + card.usedCents,
-      limitCents: totals.limitCents + card.limitCents,
+      usedCents: totals.usedCents === null || card.usedCents === null ? null : totals.usedCents + card.usedCents,
+      limitCents: totals.limitCents === null || card.limitCents === null ? null : totals.limitCents + card.limitCents,
     }),
-    { usedCents: 0, limitCents: 0 },
+    { usedCents: 0, limitCents: 0 } as Pick<CreditCard, "usedCents" | "limitCents">,
   );
 }
 

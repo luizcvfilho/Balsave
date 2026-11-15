@@ -14,28 +14,31 @@ import { LineChart } from "../../components/charts/line-chart";
 import { RecentTransactions } from "../../components/dashboard/recent-transactions";
 import { SpendingCategories } from "../../components/dashboard/spending-categories";
 import { useReportQuery } from "../../components/details/report-query";
-import { mockAccounts, mockAsOf, mockCards, mockSpendingMonths } from "../../data/mock-data";
-import {
-  balanceChartPoint, balanceHistory, currentMonth, paceChartPoints, reportedTransactions, spending,
-} from "../../data/mock-reports";
+import { accountBalances } from "../../data/financial-data";
+import { useFinancialReports } from "../../data/financial-reports";
 import { categoryBreakdown, summarizeBalances, summarizeCards } from "../../lib/finance";
-import { formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
+import { formatAvailableMoney, formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
-
-const currentDay = Number(mockAsOf.slice(8));
-const balances = summarizeBalances(mockAccounts);
-const cards = summarizeCards(mockCards);
-const categoryPeriods = mockSpendingMonths.map(month => categoryBreakdown(spending, month));
-const pacePoints = paceChartPoints(currentMonth);
-const history = balanceHistory().slice(1);
-const balancePoints = history.map(balanceChartPoint);
-const recentTransactions = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
 
 const twoColumns = "repeat(2, minmax(0, 1fr))";
 
 export function DashboardPage() {
   const { params, update } = useReportQuery();
-  const month = optionValue(params.get("mes"), mockSpendingMonths, currentMonth);
+  const {
+    accounts, asOf, cards: cardList, months, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
+    balanceHistory, balanceChartPoint, failedConnections, live,
+  } = useFinancialReports();
+  const currentDay = Number(asOf.slice(8));
+  const balances = summarizeBalances(accountBalances(accounts));
+  const cards = summarizeCards(cardList);
+  const categoryPeriods = months.map(month => categoryBreakdown(spending, month));
+  const pacePoints = paceChartPoints(currentMonth);
+  const comparison = canCompare(currentMonth);
+  const history = balanceHistory().slice(1);
+  const balancePoints = history.map(balanceChartPoint);
+  const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
+  const recentTransactions = live ? latest.slice(0, 10) : latest;
+  const month = optionValue(params.get("mes"), months, currentMonth);
   const [paceIndex, setPaceIndex] = useState(currentDay - 1);
   const [balanceIndex, setBalanceIndex] = useState(history.length - 1);
 
@@ -43,7 +46,8 @@ export function DashboardPage() {
     return reportHref(path, { painelMes: month === currentMonth ? undefined : month, ...values });
   }
 
-  const cardUsage = cards.limitCents > 0 ? cards.usedCents / cards.limitCents : 0;
+  const cardUsage = cards.usedCents !== null && cards.limitCents !== null && cards.limitCents > 0
+    ? cards.usedCents / cards.limitCents : null;
 
   return (
     <Container
@@ -55,36 +59,42 @@ export function DashboardPage() {
         <div>
           <Typography variant="h1" color="primary.main">Painel financeiro</Typography>
           <Typography variant="body2" color="var(--text-secondary)" sx={{ mt: 1 }}>
-            <time dateTime={mockAsOf}>{formatDate(mockAsOf)}</time>
+            <time dateTime={asOf}>{formatDate(asOf)}</time>
           </Typography>
         </div>
         <Chip
-          label="Dados fictícios"
+          label={live ? "Dados do Meu Pluggy" : "Dados fictícios"}
           size="small"
           sx={{ bgcolor: "var(--surface-muted)", color: "var(--text-secondary)", fontWeight: 600 }}
         />
       </Stack>
+
+      {failedConnections > 0 && (
+        <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>
+      )}
 
       <Box sx={{ display: "grid", gap: "inherit", gridTemplateColumns: { sm: twoColumns } }}>
         <MetricCard
           id="contas"
           title="Saldo em contas"
           href={details("/contas")}
-          value={formatMoney(balances.totalCents)}
+          value={accounts.length && accounts.every(account => account.balanceCents !== null)
+            ? formatMoney(balances.totalCents) : "Indisponível"}
           highlighted
           rows={balances.banks.map(({ bank, balanceCents }) => ({
             key: bank,
             label: <Link className="report-link report-action" href={details("/contas", { banco: bank })}>{bank}</Link>,
-            value: formatMoney(balanceCents),
+            value: formatAvailableMoney(accounts.some(account => account.bank === bank && account.balanceCents === null)
+              ? null : balanceCents),
           }))}
         />
         <MetricCard
           id="cartoes"
           title="Limite usado nos cartões"
           href={details("/cartoes")}
-          value={formatMoney(cards.usedCents)}
-          detail={`de ${formatMoney(cards.limitCents)}`}
-          indicator={
+          value={formatAvailableMoney(cardList.length ? cards.usedCents : null)}
+          detail={cardList.length && cards.limitCents !== null ? `de ${formatMoney(cards.limitCents)}` : undefined}
+          indicator={cardUsage !== null && (
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <LinearProgress
                 aria-label="Proporção do limite total dos cartões usada"
@@ -96,19 +106,19 @@ export function DashboardPage() {
                 {formatPercent(cardUsage)}
               </Typography>
             </Stack>
-          }
-          rows={mockCards.map(({ id, bank, lastFour, usedCents, limitCents }) => ({
-            key: `${bank}-${lastFour}`,
+          )}
+          rows={cardList.map(({ id, bank, lastFour, usedCents, limitCents }) => ({
+            key: id,
             label: (
               <Link className="report-link report-action" href={details("/cartoes", { cartao: id })}>
-                <span>{bank} <span aria-hidden="true">·</span> <span className="sr-only">final </span>{lastFour}</span>
+                <span>{bank} · {lastFour ? `final ${lastFour}` : "Cartão"}</span>
               </Link>
             ),
             value: (
               <>
-                {formatMoney(usedCents)}{" "}
+                {formatAvailableMoney(usedCents)}{" "}
                 <Typography component="span" variant="inherit" color="var(--text-secondary)" sx={{ fontWeight: 400 }}>
-                  / {formatMoney(limitCents)}
+                  / {formatAvailableMoney(limitCents)}
                 </Typography>
               </>
             ),
@@ -121,25 +131,25 @@ export function DashboardPage() {
           id="ritmo"
           title="Ritmo de gastos"
           href={details("/gastos", { aba: "ritmo", dia: String(paceIndex + 1) })}
-          description="Gasto líquido acumulado por dia do mês"
+          description={live ? "Gastos efetivados acumulados por dia do mês" : "Gasto líquido acumulado por dia do mês"}
         >
           <LineChart
             points={pacePoints}
             series={[
               { label: formatMonthName(currentMonth), style: "actual" },
-              { label: "Média dos 3 meses anteriores", style: "reference" },
+              ...(comparison ? [{ label: "Média dos 3 meses anteriores", style: "reference" } as const] : []),
             ]}
             axisIndices={[0, 6, 13, 20, pacePoints.length - 1]}
             initialIndex={currentDay - 1}
             onSelect={setPaceIndex}
             axisLabel="Dia do mês no gráfico de ritmo de gastos"
             zeroBased
-            compareToReference
+            compareToReference={comparison}
           />
         </SectionCard>
         <SpendingCategories
           periods={categoryPeriods}
-          asOf={mockAsOf}
+          asOf={asOf}
           month={month}
           onMonthChange={value => update({ mes: value === currentMonth ? undefined : value })}
           getHref={category => details("/gastos", { mes: month, categoria: category })}
@@ -149,10 +159,10 @@ export function DashboardPage() {
       <SectionCard
         id="evolucao"
         title="Evolução do saldo em contas"
-        href={details("/contas", { aba: "evolucao", ponto: history[balanceIndex].month })}
-        description="Saldo no fechamento de cada mês e saldo atual do mês em andamento"
+        href={details("/contas", { aba: "evolucao", ponto: history[balanceIndex]?.month })}
+        description={history.length ? "Saldo no fechamento de cada mês e saldo atual do mês em andamento" : undefined}
       >
-        <LineChart
+        {balancePoints.length > 1 ? <LineChart
           points={balancePoints}
           series={[{ label: "Saldo consolidado", style: "actual" }]}
           axisIndices={balancePoints.map((_, index) => index)}
@@ -160,7 +170,7 @@ export function DashboardPage() {
           onSelect={setBalanceIndex}
           axisLabel="Mês no gráfico de evolução do saldo"
           partialLastPoint
-        />
+        /> : <p className="report-muted">Histórico de saldos mensais indisponível para estas conexões.</p>}
       </SectionCard>
 
       <RecentTransactions

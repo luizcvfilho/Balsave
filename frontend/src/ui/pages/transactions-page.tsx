@@ -5,14 +5,13 @@ import { useState } from "react";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { ReceiptEditor, useReceiptAnnotations } from "../../components/details/receipt-annotations";
-import { matchesSearch, PeriodFields, readPeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
+import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
-import { kindOptions, ledgerCategoryOptions, orderOptions } from "../../components/details/transaction-filters";
+import { kindOptions, orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
-import { mockAsOf } from "../../data/mock-data";
-import { reportedTransactions, trackedRefunds, transactionSource } from "../../data/mock-reports";
+import { useFinancialReports } from "../../data/financial-reports";
 import { isIncoming, type Transaction, transactionCategory, transactionKindLabels } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
 import { optionValue } from "../../lib/report-links";
@@ -31,6 +30,7 @@ const statusOptions = [
 
 export function TransactionsPage() {
   const { params, href } = useReportQuery();
+  const { reportedTransactions } = useFinancialReports();
   const dashboardMonth = params.get("painelMes");
   const refunds = params.get("aba") === "reembolsos";
   const id = params.get("lancamento");
@@ -66,9 +66,12 @@ export function TransactionsPage() {
 
 function TransactionLedger({ search, setSearch }: { search: string; setSearch: (value: string) => void }) {
   const { params, href, update } = useReportQuery();
-  const annotations = useReceiptAnnotations();
-  const period = readPeriod(params);
-  const type = optionValue(params.get("tipo"), kindOptions.map(option => option.value));
+  const { live, reportedTransactions } = useFinancialReports();
+  const annotations = useReceiptAnnotations(!live);
+  const period = usePeriod(params);
+  const ledgerCategoryOptions = useCategoryOptions(true);
+  const types = live ? kindOptions : kindOptions.filter(option => option.value !== "credit");
+  const type = optionValue(params.get("tipo"), types.map(option => option.value));
   const category = optionValue(params.get("categoria"), ledgerCategoryOptions.map(option => option.value));
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const matches = reportedTransactions.filter(transaction => {
@@ -87,7 +90,7 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
     <SectionCard id="historico-lancamentos" title="Histórico de lançamentos">
       <div className="report-filters">
         <PeriodFields period={period} update={update} />
-        <ReportSelect label="Tipo" value={type} options={kindOptions} onChange={value => update({ tipo: value })} />
+        <ReportSelect label="Tipo" value={type} options={types} onChange={value => update({ tipo: value })} />
         <ReportSelect label="Categoria" value={category} options={ledgerCategoryOptions} onChange={value => update({ categoria: value })} />
         <SearchField value={search} onChange={setSearch} />
         <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
@@ -100,12 +103,21 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
 
 function Refunds() {
   const { params, href, update } = useReportQuery();
-  const period = readPeriod(params, "todos");
+  const { asOf, live, trackedRefunds } = useFinancialReports();
+  const period = usePeriod(params, "todos");
   const status = optionValue(params.get("status"), Object.keys(refundLabels));
   const results = trackedRefunds.filter(group =>
     (!status || group.status === status)
     && (period.includes(group.expense.date) || group.refunds.some(refund => period.includes(refund.date))),
   ).sort((first, second) => second.expense.date.localeCompare(first.expense.date));
+
+  if (live) {
+    return (
+      <SectionCard id="acompanhamento" title="Acompanhar reembolsos">
+        <p className="report-muted">Créditos importados aparecem em “Todos os lançamentos”. O acompanhamento depende do vínculo com a compra original.</p>
+      </SectionCard>
+    );
+  }
 
   return (
     <SectionCard id="acompanhamento" title="Acompanhar reembolsos">
@@ -114,7 +126,7 @@ function Refunds() {
         <ReportSelect label="Status" value={status} options={statusOptions} onChange={value => update({ status: value })} />
       </div>
       <p className="report-muted">
-        Compras ou recebimentos no período. O saldo pendente considera os valores recebidos até {formatDate(mockAsOf)}.
+        Compras ou recebimentos no período. O saldo pendente considera os valores recebidos até {formatDate(asOf)}.
       </p>
       {results.length > 0 ? (
         // biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden.
@@ -136,7 +148,7 @@ function Refunds() {
   );
 }
 
-type RefundGroup = (typeof trackedRefunds)[number];
+type RefundGroup = ReturnType<typeof useFinancialReports>["trackedRefunds"][number];
 
 function RefundAmounts({ group }: { group: RefundGroup }) {
   return <ReportMetrics items={[
@@ -166,7 +178,8 @@ function RefundCredits({ group }: { group: RefundGroup }) {
 
 function TransactionDetail({ transaction }: { transaction: Transaction }) {
   const { href } = useReportQuery();
-  const annotations = useReceiptAnnotations();
+  const { live, trackedRefunds, transactionSource } = useFinancialReports();
+  const annotations = useReceiptAnnotations(!live);
   const group = trackedRefunds.find(({ expense }) => {
     const expenseId = transaction.kind === "refund" ? transaction.expenseId : transaction.id;
     return expense.id === expenseId;
@@ -194,7 +207,7 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
           {transaction.kind === "expense" && <RefundCredits group={group} />}
         </SectionCard>
       )}
-      {(transaction.kind === "income" || transaction.kind === "refund") && (
+      {!live && (transaction.kind === "income" || transaction.kind === "refund") && (
         <SectionCard id="classificacao-recebimento" title="Classificação e tags">
           <ReceiptEditor id={transaction.id} annotation={annotations[transaction.id]} />
         </SectionCard>

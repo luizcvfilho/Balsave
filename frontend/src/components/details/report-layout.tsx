@@ -3,11 +3,8 @@ import Container from "@mui/material/Container";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { mockSpendingMonths } from "../../data/mock-data";
-import { formatMonth } from "../../lib/format";
+import { useFinancialReports } from "../../data/financial-reports";
 import { optionValue, reportHref } from "../../lib/report-links";
-
-export const monthOptions = mockSpendingMonths.map(month => ({ value: month, label: formatMonth(month) }));
 
 export function ReportLayout({ title, dashboardMonth, children, back }: {
   title: string;
@@ -15,7 +12,8 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
   children: ReactNode;
   back?: { href: string; label: string };
 }) {
-  const month = optionValue(dashboardMonth, mockSpendingMonths);
+  const { live, months, failedConnections } = useFinancialReports();
+  const month = optionValue(dashboardMonth, months);
   const backLink = back ?? { href: reportHref("/", { mes: month }), label: "Voltar ao painel" };
 
   return (
@@ -24,9 +22,10 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
         <Link href={backLink.href} className="report-link report-back">← {backLink.label}</Link>
         <div className="report-title">
           <Typography variant="h1" color="primary.main">{title}</Typography>
-          <Chip label="Dados fictícios" size="small" sx={{ bgcolor: "var(--surface-muted)", color: "var(--text-secondary)" }} />
+          <Chip label={live ? "Dados do Meu Pluggy" : "Dados fictícios"} size="small" sx={{ bgcolor: "var(--surface-muted)", color: "var(--text-secondary)" }} />
         </div>
       </header>
+      {failedConnections > 0 && <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>}
       {children}
     </Container>
   );

@@ -30,6 +30,7 @@ const monthAbbreviation = new Intl.DateTimeFormat("pt-BR", { month: "short", tim
 
 // ISO date strings represent calendar dates in the reporting timezone.
 export const formatMoney = (cents: number) => currency.format(cents / 100);
+export const formatAvailableMoney = (cents: number | null) => cents === null ? "Indisponível" : formatMoney(cents);
 export const formatSignedMoney = (cents: number) => signedCurrency.format(cents / 100);
 export const formatPercent = (share: number) => percent.format(share);
 export function formatCompactMoney(cents: number) {

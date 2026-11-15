@@ -5,15 +5,14 @@ import { useState } from "react";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
-import { matchesSearch, PeriodFields, readPeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
-import { monthOptions, ReportLayout, ReportNavigation } from "../../components/details/report-layout";
+import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
+import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
-import { expenseCategories, expenseCategoryOptions, orderOptions } from "../../components/details/transaction-filters";
+import { orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
-import { mockAsOf, mockSpendingMonths } from "../../data/mock-data";
-import { currentMonth, expenses, paceChartPoints } from "../../data/mock-reports";
-import { previousMonths, transactionCategory } from "../../lib/finance";
+import { useFinancialReports } from "../../data/financial-reports";
+import { transactionCategory } from "../../lib/finance";
 import { formatDate, formatMoney, formatMonthName } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
@@ -35,8 +34,10 @@ export function SpendingPage() {
 
 function CategoryExpenses() {
   const { params, update } = useReportQuery();
-  const period = readPeriod(params);
-  const category = optionValue(params.get("categoria"), expenseCategories);
+  const period = usePeriod(params);
+  const { expenses, live } = useFinancialReports();
+  const expenseCategoryOptions = useCategoryOptions();
+  const category = optionValue(params.get("categoria"), expenseCategoryOptions.map(option => option.value));
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
   const results = expenses.filter(({ expense }) => period.includes(expense.date)
@@ -56,6 +57,7 @@ function CategoryExpenses() {
         <SearchField value={search} onChange={setSearch} />
         <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
       </div>
+      {live && <p className="report-muted">Os gastos consideram lançamentos efetivados. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
       <ReportMetrics items={[
         { label: "Gasto líquido", value: formatMoney(total) },
         { label: "Compras", value: String(rows.length) },
@@ -71,15 +73,16 @@ function CategoryExpenses() {
 
 function SpendingRhythm() {
   const { params, update } = useReportQuery();
-  const month = optionValue(params.get("ritmoMes"), mockSpendingMonths,
-    optionValue(params.get("mes"), mockSpendingMonths, currentMonth));
+  const { monthOptions, months, currentMonth, asOf, expenses, paceChartPoints, canCompare } = useFinancialReports();
+  const month = optionValue(params.get("ritmoMes"), months,
+    optionValue(params.get("mes"), months, currentMonth));
   const points = paceChartPoints(month);
-  const lastReported = month === currentMonth ? Number(mockAsOf.slice(8)) : points.length;
+  const lastReported = month === currentMonth ? Number(asOf.slice(8)) : points.length;
   const requestedDay = Number(params.get("dia"));
   const day = Number.isInteger(requestedDay) && requestedDay >= 1 && requestedDay <= points.length ? requestedDay : lastReported;
   const available = day <= lastReported;
   const date = `${month}-${String(day).padStart(2, "0")}`;
-  const comparison = previousMonths(month, 3).every(previous => mockSpendingMonths.includes(previous));
+  const comparison = canCompare(month);
   const categories = new Map<string, number>();
   const dailyRows = [];
   for (const { expense, netCents, receivedCents } of expenses) {
@@ -121,7 +124,7 @@ function SpendingRhythm() {
             getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id })}
             empty="Nenhum gasto neste dia."
           />
-        ) : <p className="report-muted">Dados disponíveis até {formatDate(mockAsOf)}.</p>}
+        ) : <p className="report-muted">Dados disponíveis até {formatDate(asOf)}.</p>}
       </SectionCard>
       {available && (
         <SectionCard id="acumulado-categoria" title="Categorias no acumulado">

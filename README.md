@@ -1,6 +1,6 @@
 # Balsave
 
-A personal finance web application in Brazilian Portuguese (pt-BR) that uses Brazilian reais (BRL). The initial version includes a dashboard with mock data.
+A personal finance web application in Brazilian Portuguese (pt-BR) that uses Brazilian reais (BRL). The dashboard supports demo data and a local Meu Pluggy preview.
 
 ## Run locally
 
@@ -66,7 +66,7 @@ Composite foreign keys prevent accounts, categories and refund links from refere
 
 Transaction amounts use `numeric(20,6)` and a separate debit or credit direction. Read amounts as `Decimal` in Python. Preserve source dates that have no time component and convert timestamps to `America/Sao_Paulo` before assigning an `occurred_on` date. For reporting, sum posted entries by currency. Count card bill payments as transfers and linked refunds against the original expense. PostgreSQL checks that both entries are posted, have the same currency, and that their total refunds do not exceed the original amount, including during concurrent writes.
 
-External account IDs are unique per user and provider. External transaction IDs are unique per account. An importer can upsert on these keys and preserve user categorization. The dashboard still uses mock data.
+External account IDs are unique per user and provider. External transaction IDs are unique per account. An importer can upsert on these keys and preserve user categorization.
 
 Revisions live in `backend/migrations/versions/`. Run the following commands from the repository root to create a revision and apply it after editing the generated file.
 
@@ -101,6 +101,16 @@ make migrate
 Run the `psql` command once `pg_isready` reports that the server is accepting connections. The SQL renames the database, schema and API role in the existing volume.
 
 ## Connect your accounts with Meu Pluggy
+
+1. Keep `BALSAVE_BIND_ADDRESS=127.0.0.1` and set `PLUGGY_CLIENT_ID` and `PLUGGY_CLIENT_SECRET` for your Pluggy application in the repository's local `.env`. If needed, enable **MeuPluggy** in the application's connector settings. [Meu Pluggy setup](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)
+2. Set `BALSAVE_PREVIEW_PASSWORD` in the same file to a unique random password, generated with `openssl rand -hex 24`. Run `make up` and open <http://localhost:8080> on the same computer. Sign in using the preview password.
+3. Select “Conectar bancos” → “Conectar com Meu Pluggy”. Sign in to Meu Pluggy and authorize access to the banks already connected there. Balsave captures the connection references returned by the widget. Select “Ver dados no painel” to see the available balances, card limits, and posted transactions.
+
+The preview uses one local owner and a secure, HTTP-only session cookie. Pluggy API credentials stay in FastAPI. Only the short-lived Connect Token reaches the widget. Migration `0003` creates a local owner and stores the Pluggy item references so they are available after restart. Financial records are read on demand and kept in memory for up to five minutes. Clear `BALSAVE_PREVIEW_PASSWORD` and restart the stack to use the demo.
+
+The preview displays available BRL balances and posted BRL transactions, including foreign-currency card purchases when Pluggy provides the amount in the card's BRL currency. Card limit usage requires a reported total and available limit. Monthly balance history, open bills, future installments, and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
+
+### Inspect a connection from the command line
 
 1. Sign in to Meu Pluggy, add your bank, and authorize access. [Meu Pluggy guide](https://meu.pluggy.ai/api-guide)
 2. Sign in to the Pluggy Dashboard with the same account. Under **Aplicações**, open your application and go to **Demo**. Select **Conectar conta → MeuPluggy** and authorize access to your existing connections. If you customized the available connectors, enable **MeuPluggy** under **Direct Connectors** in the **Pessoal** group. [Dashboard setup](https://docs.pluggy.ai/pt/docs/guides/meu-pluggy-personal-use)

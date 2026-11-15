@@ -4,22 +4,17 @@ import Link from "next/link";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
-import { PeriodFields, readPeriod, ReportSelect } from "../../components/details/report-filters";
+import { PeriodFields, usePeriod, ReportSelect } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
-import { mockAccounts, mockAsOf } from "../../data/mock-data";
-import { balanceChartPoint, balanceHistory, currentMonth, reportedTransactions } from "../../data/mock-reports";
+import { accountBalances, type ReportAccount } from "../../data/financial-data";
+import { useFinancialReports } from "../../data/financial-reports";
 import { isIncoming, summarizeBalances } from "../../lib/finance";
-import { formatDate, formatMoney, formatMonth, formatSignedMoney } from "../../lib/format";
+import { formatAvailableMoney, formatDate, formatMoney, formatMonth, formatSignedMoney } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
-const banks = summarizeBalances(mockAccounts).banks.map(({ bank }) => bank);
-const bankOptions = [
-  { value: "", label: "Todas as instituições" },
-  ...banks.map(bank => ({ value: bank, label: bank })),
-];
 const flowOptions = [
   { value: "", label: "Entradas e saídas" },
   { value: "in", label: "Somente entradas" },
@@ -28,9 +23,12 @@ const flowOptions = [
 
 export function AccountsPage() {
   const { params, href, update } = useReportQuery();
+  const { accounts } = useFinancialReports();
+  const banks = [...new Set(accounts.map(account => account.bank))];
+  const bankOptions = [{ value: "", label: "Todas as instituições" }, ...banks.map(bank => ({ value: bank, label: bank }))];
   const evolution = params.get("aba") === "evolucao";
   const bank = optionValue(params.get("banco"), banks);
-  const account = mockAccounts.find(account => account.id === params.get("conta") && (!bank || bank === account.bank));
+  const account = accounts.find(account => account.id === params.get("conta") && (!bank || bank === account.bank));
 
   return (
     <ReportLayout title={evolution ? "Evolução do saldo em contas" : "Saldo em contas"} dashboardMonth={params.get("painelMes")}>
@@ -60,19 +58,27 @@ export function AccountsPage() {
 
 function AccountBalances({ bank, activeAccount }: { bank: string; activeAccount?: string }) {
   const { href } = useReportQuery();
-  const visible = mockAccounts.filter(account => !bank || account.bank === bank);
-  const balances = summarizeBalances(visible);
+  const { accounts, asOf } = useFinancialReports();
+  const visible = accounts.filter(account => !bank || account.bank === bank);
+  const balances = summarizeBalances(accountBalances(visible));
+  const bankNames = [...new Set([...balances.banks.map(row => row.bank), ...visible.map(account => account.bank)])];
+
+  if (!visible.length) {
+    return <SectionCard id="saldos-individuais" title="Saldos por conta"><p className="report-muted">Nenhuma conta em reais disponível.</p></SectionCard>;
+  }
 
   return (
-    <SectionCard id="saldos-individuais" title="Saldos por conta" description={`Saldo em ${formatDate(mockAsOf)}`}>
-      <ReportMetrics items={[{ label: "Saldo consolidado", value: formatMoney(balances.totalCents) }]} />
+    <SectionCard id="saldos-individuais" title="Saldos por conta" description={`Saldo em ${formatDate(asOf)}`}>
+      <ReportMetrics items={[{ label: "Saldo consolidado", value: visible.length && visible.every(account => account.balanceCents !== null)
+        ? formatMoney(balances.totalCents) : "Indisponível" }]} />
       {/* biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden. */}
       <ul className="report-list" role="list">
-        {balances.banks.map(({ bank: bankName, balanceCents }) => (
+        {bankNames.map(bankName => (
           <li key={bankName} className="report-list-item">
             <div className="report-group">
               <h3 className="report-strong">{bankName}</h3>
-              <span className="report-strong">{formatMoney(balanceCents)}</span>
+              <span className="report-strong">{formatAvailableMoney(visible.some(account => account.bank === bankName && account.balanceCents === null)
+                ? null : balances.banks.find(row => row.bank === bankName)?.balanceCents ?? null)}</span>
             </div>
             <BreakdownList rows={visible.filter(account => account.bank === bankName).map(account => ({
               key: account.id,
@@ -84,7 +90,7 @@ function AccountBalances({ bank, activeAccount }: { bank: string; activeAccount?
                   aria-current={activeAccount === account.id ? "true" : undefined}
                 >{account.name}</Link>
               ),
-              value: formatMoney(account.balanceCents),
+              value: formatAvailableMoney(account.balanceCents),
             }))} />
           </li>
         ))}
@@ -93,9 +99,10 @@ function AccountBalances({ bank, activeAccount }: { bank: string; activeAccount?
   );
 }
 
-function AccountStatement({ account }: { account: (typeof mockAccounts)[number] }) {
+function AccountStatement({ account }: { account: ReportAccount }) {
   const { params, update } = useReportQuery();
-  const period = readPeriod(params);
+  const { reportedTransactions } = useFinancialReports();
+  const period = usePeriod(params);
   const direction = optionValue(params.get("direcao"), ["in", "out"]);
   const transactions = reportedTransactions.filter(transaction => transaction.accountId === account.id && period.includes(transaction.date));
   const incoming = transactions.reduce((sum, transaction) => sum + (isIncoming(transaction) ? transaction.amountCents : 0), 0);
@@ -122,7 +129,11 @@ function AccountStatement({ account }: { account: (typeof mockAccounts)[number] 
 
 function BalanceEvolution({ bank }: { bank: string }) {
   const { params, update } = useReportQuery();
+  const { asOf, currentMonth, balanceHistory, balanceChartPoint } = useFinancialReports();
   const history = balanceHistory(bank);
+  if (history.length < 2) {
+    return <SectionCard id="historico" title="Histórico de saldos"><p className="report-muted">Histórico de saldos mensais indisponível para estas conexões.</p></SectionCard>;
+  }
   const months = history.slice(1).map(({ month }) => month);
   const from = optionValue(params.get("inicio"), months, months[0]);
   const to = optionValue(params.get("fim"), months.filter(month => month >= from), currentMonth);
@@ -146,7 +157,7 @@ function BalanceEvolution({ bank }: { bank: string }) {
       ]} />
       <p className="report-muted">
         {closing.month === currentMonth
-          ? `Do fechamento de ${formatMonth(opening.month)} até ${formatDate(mockAsOf)}.`
+          ? `Do fechamento de ${formatMonth(opening.month)} até ${formatDate(asOf)}.`
           : `Do fechamento de ${formatMonth(opening.month)} ao fechamento de ${formatMonth(closing.month)}.`}
       </p>
       {points.length > 1 && (

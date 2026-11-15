@@ -1,18 +1,16 @@
-import { expenses } from "../../data/mock-reports";
-import { transactionCategory, transactionKindLabels } from "../../lib/finance";
+import { useFinancialReports } from "../../data/financial-reports";
+import { transactionKindLabels } from "../../lib/finance";
 
-export const expenseCategories = Array.from(new Set(expenses.map(({ expense }) => transactionCategory(expense))))
-  .sort((first, second) => first.localeCompare(second, "pt-BR"));
-
-export const expenseCategoryOptions = [
-  { value: "", label: "Todas as categorias" },
-  ...expenseCategories.map(category => ({ value: category, label: category })),
-];
-
-export const ledgerCategoryOptions = [
-  ...expenseCategoryOptions,
-  ...["Receitas", "Reembolso", "Transferência"].map(category => ({ value: category, label: category })),
-];
+export function useCategoryOptions(ledger = false) {
+  const { expenseCategories, live } = useFinancialReports();
+  const categories = ledger
+    ? [...new Set([...expenseCategories, "Receitas", "Reembolso", "Transferência", ...(live ? ["Crédito"] : [])])]
+    : expenseCategories;
+  return [
+    { value: "", label: "Todas as categorias" },
+    ...categories.map(category => ({ value: category, label: category })),
+  ];
+}
 
 export const kindOptions = [
   { value: "", label: "Todos os tipos" },

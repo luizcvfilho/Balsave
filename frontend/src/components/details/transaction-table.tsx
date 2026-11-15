@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/a11y/noRedundantRoles: Retain native table semantics in Safari when the mobile layout stacks the cells. */
 import Link from "next/link";
-import { transactionSource } from "../../data/mock-reports";
+import { useFinancialReports } from "../../data/financial-reports";
 import { isIncoming, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
 
@@ -8,6 +8,7 @@ export const amountColors = {
   expense: "var(--negative)",
   income: "var(--positive)",
   refund: "var(--positive)",
+  credit: "var(--positive)",
   transfer: "var(--text-secondary)",
 } satisfies Record<Transaction["kind"], string>;
 
@@ -38,6 +39,7 @@ export function TransactionTable({ label, rows, getHref, empty = "Nenhum lançam
   getHref: (id: string) => string;
   empty?: string;
 }) {
+  const { transactionSource } = useFinancialReports();
   if (rows.length === 0) return <p className="report-muted">{empty}</p>;
 
   return (

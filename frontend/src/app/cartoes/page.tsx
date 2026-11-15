@@ -1,7 +1,6 @@
-import { connection } from "next/server";
+import { FinancialPage } from "../../components/preview/financial-page";
 import { CardsPage } from "../../ui/pages/cards-page";
 
 export default async function Page() {
-  await connection();
-  return <CardsPage />;
+  return <FinancialPage><CardsPage /></FinancialPage>;
 }

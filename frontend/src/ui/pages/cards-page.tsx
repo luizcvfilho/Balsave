@@ -7,52 +7,58 @@ import { ReportLayout } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
-import { mockCards } from "../../data/mock-data";
-import { reportedTransactions } from "../../data/mock-reports";
+import type { ReportCard } from "../../data/financial-data";
+import { useFinancialReports } from "../../data/financial-reports";
 import { summarizeCards } from "../../lib/finance";
-import { formatDate, formatMoney, formatMonth } from "../../lib/format";
+import { formatAvailableMoney, formatDate, formatMoney, formatMonth } from "../../lib/format";
 import { reportHref } from "../../lib/report-links";
 
-const totals = summarizeCards(mockCards);
-
-function limitMetrics({ limitCents, usedCents }: typeof totals) {
+function limitMetrics({ limitCents, usedCents, availableCents }: Pick<ReportCard, "limitCents" | "usedCents" | "availableCents">) {
+  const available = availableCents ?? (limitCents === null || usedCents === null ? null : limitCents - usedCents);
   return [
-    { label: "Limite total", value: formatMoney(limitCents) },
-    { label: "Limite usado", value: formatMoney(usedCents) },
-    { label: "Limite disponível", value: formatMoney(limitCents - usedCents) },
+    { label: "Limite total", value: formatAvailableMoney(limitCents) },
+    { label: "Limite usado", value: formatAvailableMoney(usedCents) },
+    { label: "Limite disponível", value: formatAvailableMoney(available) },
   ];
 }
 
 export function CardsPage() {
   const { params, href } = useReportQuery();
-  const activeCard = mockCards.find(card => card.id === params.get("cartao"));
+  const { cards, live, reportedTransactions } = useFinancialReports();
+  const totals = summarizeCards(cards);
+  const activeCard = cards.find(card => card.id === params.get("cartao"));
   const dashboardMonth = params.get("painelMes");
-  const charges = activeCard ? reportedTransactions.filter(transaction => transaction.cardId === activeCard.id
-    && transaction.kind === "expense" && activeCard.openInvoice.transactionIds.includes(transaction.id)) : [];
+  const cardEntries = activeCard ? reportedTransactions.filter(transaction => transaction.cardId === activeCard.id) : [];
+  const openInvoice = activeCard?.openInvoice;
+  const charges = openInvoice ? cardEntries.filter(transaction =>
+    transaction.kind === "expense" && openInvoice.transactionIds.includes(transaction.id),
+  ) : [];
   const invoice = charges.reduce((sum, charge) => sum + charge.amountCents, 0);
 
   return (
     <ReportLayout title="Cartões" dashboardMonth={dashboardMonth}>
       <SectionCard id="limites" title="Limites dos cartões">
-        <ReportMetrics items={limitMetrics(totals)} />
+        {cards.length ? <ReportMetrics items={limitMetrics(totals)} /> : (
+          <p className="report-muted">Nenhum cartão em reais disponível.</p>
+        )}
         {/* biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden. */}
         <ul className="report-list" role="list">
-          {mockCards.map(card => (
+          {cards.map(card => (
             <li key={card.id} className="report-list-item">
               <Link className="report-link report-action" href={`${href({ cartao: card.id })}#fatura`} aria-current={activeCard?.id === card.id ? "true" : undefined}>
-                {card.bank} · final {card.lastFour}
+                {card.bank} · {card.lastFour ? `final ${card.lastFour}` : "Cartão"}
               </Link>
               <ReportMetrics items={limitMetrics(card)} />
             </li>
           ))}
         </ul>
       </SectionCard>
-      {activeCard && (
+      {activeCard && openInvoice && (
         <>
           <SectionCard id="fatura" title="Fatura aberta" description={`${activeCard.bank} · final ${activeCard.lastFour}`}>
             <ReportMetrics items={[
               { label: "Total da fatura aberta", value: formatMoney(invoice) },
-              { label: "Vencimento", value: formatDate(activeCard.openInvoice.dueDate) },
+              { label: "Vencimento", value: formatDate(openInvoice.dueDate) },
             ]} />
             <TransactionTable
               label="Compras da fatura aberta"
@@ -71,6 +77,16 @@ export function CardsPage() {
             ) : <p className="report-muted">Nenhuma parcela futura.</p>}
           </SectionCard>
         </>
+      )}
+      {activeCard && live && (
+        <SectionCard id="fatura" title="Lançamentos do cartão" description={activeCard.bank}>
+          <p className="report-muted">Fatura aberta e parcelas futuras indisponíveis nesta consulta.</p>
+          <TransactionTable
+            label="Lançamentos efetivados do cartão"
+            rows={orderedTransactions(cardEntries.map(transaction => ({ transaction })))}
+            getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth ?? undefined, lancamento: id })}
+          />
+        </SectionCard>
       )}
     </ReportLayout>
   );

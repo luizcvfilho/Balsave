@@ -1,8 +1,6 @@
 import { useId } from "react";
-import { mockAsOf, mockSpendingMonths } from "../../data/mock-data";
-import { currentMonth } from "../../data/mock-reports";
+import { useFinancialReports } from "../../data/financial-reports";
 import { optionValue } from "../../lib/report-links";
-import { monthOptions } from "./report-layout";
 
 type Option = { value: string; label: string };
 
@@ -23,16 +21,17 @@ export function ReportSelect({ label, value, options, onChange }: {
   );
 }
 
-function readDate(value: string | null) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value > mockAsOf) return "";
+function readDate(value: string | null, asOf: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value > asOf) return "";
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(value) ? value : "";
 }
 
-export function readPeriod(params: URLSearchParams, defaultMonth = currentMonth) {
-  const month = optionValue(params.get("mes"), [...mockSpendingMonths, "todos", "personalizado"], defaultMonth);
-  const from = month === "personalizado" ? readDate(params.get("de")) : "";
-  const to = month === "personalizado" ? readDate(params.get("ate")) : "";
+export function usePeriod(params: URLSearchParams, defaultMonth?: string) {
+  const { asOf, currentMonth, months } = useFinancialReports();
+  const month = optionValue(params.get("mes"), [...months, "todos", "personalizado"], defaultMonth ?? currentMonth);
+  const from = month === "personalizado" ? readDate(params.get("de"), asOf) : "";
+  const to = month === "personalizado" ? readDate(params.get("ate"), asOf) : "";
   return {
     month,
     from,
@@ -45,9 +44,10 @@ export function readPeriod(params: URLSearchParams, defaultMonth = currentMonth)
 }
 
 export function PeriodFields({ period, update }: {
-  period: ReturnType<typeof readPeriod>;
+  period: ReturnType<typeof usePeriod>;
   update: (values: Record<string, string | undefined>) => void;
 }) {
+  const { asOf, monthOptions } = useFinancialReports();
   return (
     <>
       <ReportSelect
@@ -61,9 +61,9 @@ export function PeriodFields({ period, update }: {
           <label className="report-field">
             <span>Data inicial</span>
             <input
-              type="date" max={period.to || mockAsOf} value={period.from}
+              type="date" max={period.to || asOf} value={period.from}
               onChange={event => {
-                const date = readDate(event.target.value);
+                const date = readDate(event.target.value, asOf);
                 if (!date || !period.to || date <= period.to) update({ de: date });
               }}
             />
@@ -71,9 +71,9 @@ export function PeriodFields({ period, update }: {
           <label className="report-field">
             <span>Data final</span>
             <input
-              type="date" min={period.from || undefined} max={mockAsOf} value={period.to}
+              type="date" min={period.from || undefined} max={asOf} value={period.to}
               onChange={event => {
-                const date = readDate(event.target.value);
+                const date = readDate(event.target.value, asOf);
                 if (!date || !period.from || date >= period.from) update({ ate: date });
               }}
             />
