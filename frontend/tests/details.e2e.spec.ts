@@ -46,6 +46,53 @@ test("uses the selected pace day for daily purchases and the net category breakd
   await expect(page.getByRole("table").getByRole("link")).toHaveCount(1);
 });
 
+test("includes only the installments dated in the selected calendar month", async ({ page }) => {
+  await page.goto("/");
+  const categories = page.getByRole("region", { name: "Gastos por categoria" });
+  await expect(categories.getByText(/R\$\s*2\.415,50/)).toBeVisible();
+  await expect(categories.getByRole("link", { name: /^Compras/ })).toContainText(/R\$\s*420,00/);
+  const installments = categories.getByRole("link", { name: /^Parcelas incluídas/ });
+  await expect(installments).toContainText(/R\$\s*420,00/);
+  await installments.click();
+
+  const filter = page.getByLabel("Tipo de compra");
+  const purchases = page.getByRole("table", { name: "Compras por categoria" });
+  await expect(filter).toHaveValue("parcelada");
+  await expect(purchases.getByRole("link")).toHaveCount(1);
+  const notebook = purchases.getByRole("row").filter({ hasText: "Notebook" });
+  await expect(notebook.getByText("Parcela 2/6")).toBeVisible();
+  await expect(notebook.getByText("13/11/2026")).toBeVisible();
+  await expect(notebook.getByText(/R\$\s*420,00/)).toBeVisible();
+  const period = page.getByLabel("Período", { exact: true });
+  await period.selectOption("2026-10");
+  await expect(notebook.getByText("Parcela 1/6")).toBeVisible();
+  await expect(purchases.getByText("Parcela 6/6")).toBeVisible();
+  await expect(purchases.getByText("Parcela 2/6")).toHaveCount(0);
+  await period.selectOption("2026-11");
+  await filter.selectOption("");
+  await expect(purchases.getByRole("link", { name: "Restaurante" })).toBeVisible();
+});
+
+test("shows upcoming installment estimates without adding them to recorded spending", async ({ page }) => {
+  await page.goto("/");
+  const categories = page.getByRole("region", { name: "Gastos por categoria" });
+  await categories.getByRole("combobox").selectOption("2026-12");
+  const planned = categories.getByRole("link", { name: /^Parcelas previstas/ });
+  await expect(planned).toContainText(/R\$\s*770,20/);
+  await expect(categories.getByText("Nenhum gasto registrado neste mês.")).toBeVisible();
+  await planned.click();
+
+  const projections = page.getByRole("region", { name: "Parcelas previstas" });
+  const actuals = page.getByRole("region", { name: "Compras no período" });
+  await expect(actuals.getByText(/R\$\s*0,00/)).toBeVisible();
+  await expect(projections.getByText(/3\/6 · 13\/12\/2026 · Compras/)).toBeVisible();
+  await expect(projections.getByRole("link", { name: "Notebook" })).toHaveAttribute("href", /lancamento=notebook-1/);
+  await page.getByLabel("Categoria", { exact: true }).selectOption("Compras");
+  await expect(projections.getByText("Cadeira ergonômica")).toHaveCount(0);
+  await page.getByLabel("Período", { exact: true }).selectOption("2027-01");
+  await expect(projections.getByText(/4\/6 · 13\/01\/2027/)).toBeVisible();
+});
+
 test("shows an institution's accounts, date-filtered statement, and balance evolution", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("region", { name: "Saldo em contas", exact: true }).getByRole("link", { name: "Itaú" }).click();
@@ -73,7 +120,7 @@ test("opens the selected card with its invoice, due date, and future installment
   const invoice = page.getByRole("region", { name: "Fatura aberta", exact: true });
   await expect(invoice.getByText("26 de novembro de 2026")).toBeVisible();
   await expect(invoice.getByRole("link", { name: "Hotel", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Parcelas futuras" }).getByText(/Notebook.*3\/6/)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Parcelas previstas" }).getByText(/Notebook.*3\/6/)).toBeVisible();
   await page.getByRole("link", { name: /Nubank.*7032/ }).click();
   await expect(invoice.getByRole("link", { name: "Restaurante" })).toBeVisible();
   await expect(invoice.getByRole("link", { name: "Hotel", exact: true })).toHaveCount(0);

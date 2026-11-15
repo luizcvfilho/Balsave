@@ -7,6 +7,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app import pluggy
+from app.installment_planning import ObservedInstallment, planned_installments
 
 REPORT_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 MAX_CENTS = 10**14
@@ -226,6 +227,19 @@ def expense_payment_method(raw: dict[str, Any], card: bool) -> str | None:
     return category_method
 
 
+def card_installment(metadata: dict[str, Any]) -> dict[str, int] | None:
+    count = metadata.get("totalInstallments")
+    number = metadata.get("installmentNumber")
+    installment = {}
+    if type(count) is int and 1 < count < 2**53:
+        installment["count"] = count
+    if type(number) is int and 1 <= number <= installment.get("count", 2**53 - 1):
+        installment["number"] = number
+    if "count" in installment or installment.get("number", 0) > 1 or metadata.get("paymentType") == "INSTALLMENT":
+        return installment
+    return None
+
+
 def normalize_transaction(
     raw: dict[str, Any], account_id: str, as_of: str, card: bool, owner_document: str | None = None,
 ) -> dict | None:
@@ -241,11 +255,32 @@ def normalize_transaction(
     if card and direction is None and amount:
         # Some connectors omit the direction. Card debits increase the balance.
         direction = "DEBIT" if amount > 0 else "CREDIT"
-    if amount is None or not occurred_on or occurred_on > as_of or direction not in ("CREDIT", "DEBIT"):
+    if amount is None or direction not in ("CREDIT", "DEBIT"):
         return None
 
     kind = transaction_kind(raw, card, direction, owner_document)
     if status == "PENDING" and kind != "expense":
+        return None
+
+    installment = None
+    metadata = raw.get("creditCardMetadata")
+    if card and kind == "expense" and isinstance(metadata, dict):
+        installment = card_installment(metadata)
+        if installment is not None:
+            bill_post_date = calendar_date(metadata.get("billPostDate"))
+            forecast = metadata.get("billForecastDate")
+            number = installment.get("number", 0)
+            if (
+                status == "PENDING" and number > 1 and not bill_post_date and isinstance(forecast, str)
+                and re.fullmatch(r"(?!0000)[0-9]{4}-(?:0[1-9]|1[0-2])", forecast) and forecast > as_of[:7]
+            ):
+                return None
+            if number == 1:
+                occurred_on = calendar_date(metadata.get("purchaseDate")) or occurred_on or bill_post_date
+            else:
+                occurred_on = bill_post_date or occurred_on
+
+    if not occurred_on or occurred_on > as_of:
         return None
     entry = {
         "id": f"{account_id}.{identifier(raw.get('id'))}",
@@ -264,6 +299,8 @@ def normalize_transaction(
         method = expense_payment_method(raw, card)
         if method:
             entry["paymentMethod"] = method
+        if installment is not None:
+            entry["installment"] = installment
     return entry
 
 
@@ -289,10 +326,28 @@ def normalize_card(raw: dict[str, Any], account_id: str, bank: str) -> dict:
     }
 
 
+def card_sync_date(item: dict, as_of: str) -> date | None:
+    details = item.get("statusDetail")
+    products = [details.get(key) for key in ("creditCards", "transactions")] if isinstance(details, dict) else []
+    if any(isinstance(product, dict) and (product.get("warnings") or product.get("isUpdated") is False) for product in products):
+        return None
+    if item.get("executionStatus") == "SUCCESS":
+        synced = calendar_date(item.get("lastUpdatedAt"))
+        return date.fromisoformat(min(synced, as_of)) if synced else None
+    if item.get("executionStatus") == "PARTIAL_SUCCESS" and products and all(
+        isinstance(product, dict) and product.get("isUpdated") is True for product in products
+    ):
+        dates = [calendar_date(product.get("lastUpdatedAt")) for product in products]
+        if all(dates):
+            return date.fromisoformat(min(as_of, *(value for value in dates if value)))
+    return None
+
+
 def load_item(
     item_id: UUID, api_key: str, as_of: str, fallback_bank: str, bank_names: dict[str, str],
 ) -> tuple[list[dict], list[dict], list[dict]]:
-    pluggy.meu_pluggy_item(item_id, api_key)
+    item = pluggy.meu_pluggy_item(item_id, api_key)
+    synced_through = card_sync_date(item, as_of)
     records = pluggy.accounts(item_id, api_key)
     codes = {code for raw in records if raw.get("type") == "BANK" and (code := bank_code(raw))}
     connection_bank = bank_names.get(next(iter(codes)), fallback_bank) if len(codes) == 1 else fallback_bank
@@ -306,23 +361,36 @@ def load_item(
         code = bank_code(raw)
         bank = bank_names.get(code, fallback_bank) if code else connection_bank
         card = raw.get("type") == "CREDIT" and raw.get("subtype") == "CREDIT_CARD"
-        if card:
-            cards.append(normalize_card(raw, account_id, bank))
-        elif raw.get("type") == "BANK":
+        if not card and raw.get("type") == "BANK":
             accounts.append({
                 "id": account_id,
                 "bank": bank,
                 "name": label(raw.get("name")) or "Conta bancária",
                 "balanceCents": cents(raw.get("balance")),
             })
-        else:
+        elif not card:
             continue
 
         owner_document = tax_document(raw.get("taxNumber")) if not card else None
+        installments: dict[str, ObservedInstallment] = {}
         for transaction in pluggy.transactions(account_id, api_key):
             entry = normalize_transaction(transaction, account_id, as_of, card, owner_document)
             if entry is not None:
                 entries.append(entry)
+                if installment := entry.get("installment"):
+                    number, count = installment.get("number"), installment.get("count")
+                    name = label(transaction.get("description")) or label(transaction.get("descriptionRaw"))
+                    if name and number and count:
+                        purchase = calendar_date(transaction["creditCardMetadata"].get("purchaseDate"))
+                        installments[entry["id"]] = ObservedInstallment(
+                            entry["id"], name, entry.get("category", "Sem categoria"),
+                            date.fromisoformat(purchase) if purchase else None, date.fromisoformat(entry["date"]),
+                            number, count, entry["amountCents"],
+                        )
+        if card:
+            card_data = normalize_card(raw, account_id, bank)
+            card_data["installments"] = planned_installments(installments.values(), synced_through)
+            cards.append(card_data)
     return accounts, cards, entries
 
 
@@ -351,7 +419,8 @@ def load_snapshot(item_ids: tuple[UUID, ...], api_key: str) -> dict:
     total_limits = sum(
         abs(card["usedCents"] or 0) + abs(card["limitCents"] or 0) for card in cards.values()
     )
-    if max(total_balances, total_entries, total_limits) > MAX_CENTS:
+    total_planned = sum(plan["amountCents"] for card in cards.values() for plan in card["installments"])
+    if max(total_balances, total_entries, total_limits, total_planned) > MAX_CENTS:
         raise pluggy.PluggyError("The reporting amount exceeds the supported range.")
 
     return {

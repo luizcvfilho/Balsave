@@ -6,12 +6,23 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   balanceCents: number | null;
 };
 
+export type PlannedInstallment = {
+  id: string;
+  transactionId?: string;
+  name: string;
+  category: string;
+  date: string;
+  number: number;
+  count: number;
+  amountCents: number;
+};
+
 export type ReportCard = CreditCard & {
   id: string;
   name?: string;
   availableCents?: number | null;
   openInvoice: { dueDate: string; transactionIds: string[] } | null;
-  installments: { name: string; month: string; number: number; count: number; amountCents: number }[];
+  installments: PlannedInstallment[];
 };
 
 export type FinancialData = {

@@ -54,6 +54,7 @@ test("combines bank and card expenses by category and excludes transfers and fut
   expect(categoryBreakdown(spending, "2026-10")).toEqual({
     month: "2026-10",
     totalCents: 69001,
+    installmentCents: 0,
     categories: [
       { name: "Alimentação", cents: 43001 },
       { name: "Viagem", cents: 25000 },
@@ -61,8 +62,28 @@ test("combines bank and card expenses by category and excludes transfers and fut
     ],
   });
   expect(categoryBreakdown(spending, "2026-11")).toEqual({
-    month: "2026-11", totalCents: 0, categories: [],
+    month: "2026-11", totalCents: 0, installmentCents: 0, categories: [],
   });
+});
+
+test("counts only installments dated in the selected month in its net installment subtotal", () => {
+  const spending = spendingByMonth([
+    { id: "purchase-1", name: "Purchase", kind: "expense", category: "Compras", date: "2026-10-10", amountCents: 2001, installment: { number: 1, count: 3 } },
+    { id: "final", name: "Completed purchase", kind: "expense", category: "Compras", date: "2026-10-27", amountCents: 1700, installment: { number: 6, count: 6 } },
+    { id: "purchase-2", name: "Purchase", kind: "expense", category: "Compras", date: "2026-11-10", amountCents: 2000, installment: { number: 2, count: 3 } },
+    { id: "purchase-3", name: "Purchase", kind: "expense", category: "Compras", date: "2026-12-13", amountCents: 2000, installment: { number: 3, count: 3 } },
+    { id: "refund", name: "Refund", kind: "refund", expenseId: "purchase-2", date: "2026-11-12", amountCents: 300 },
+    { id: "other", name: "Other", kind: "expense", category: "Compras", date: "2026-11-11", amountCents: 5000 },
+    { id: "bill", name: "Bill payment", kind: "transfer", date: "2026-11-13", amountCents: 7000 },
+  ], "2026-11-14");
+
+  expect(categoryBreakdown(spending, "2026-10").installmentCents).toBe(3701);
+  expect(categoryBreakdown(spending, "2026-11")).toEqual({
+    month: "2026-11", totalCents: 6700, installmentCents: 1700,
+    categories: [{ name: "Compras", cents: 6700 }],
+  });
+  expect(categoryBreakdown(spending, "2026-12").installmentCents).toBe(0);
+  expect(spendingPace(spending, "2026-10-31")[26].currentCents).toBe(3701);
 });
 
 test("compares the same calendar day across a year boundary and stops actuals at the reporting date", () => {

@@ -13,7 +13,7 @@ import { orderOptions, useCategoryOptions } from "../../components/details/trans
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
 import { transactionCategory } from "../../lib/finance";
-import { formatDate, formatMoney, formatMonthName } from "../../lib/format";
+import { formatDate, formatMoney, formatMonthName, formatNumericDate } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
 export function SpendingPage() {
@@ -34,41 +34,77 @@ export function SpendingPage() {
 
 function CategoryExpenses() {
   const { params, update } = useReportQuery();
-  const period = usePeriod(params);
-  const { expenses, live } = useFinancialReports();
+  const period = usePeriod(params, undefined, true);
+  const { asOf, expenses, live, plannedInstallments } = useFinancialReports();
   const expenseCategoryOptions = useCategoryOptions();
   const category = optionValue(params.get("categoria"), expenseCategoryOptions.map(option => option.value));
+  const installmentsOnly = params.get("compra") === "parcelada";
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
   const results = expenses.filter(({ expense }) => period.includes(expense.date)
     && (!category || transactionCategory(expense) === category)
+    && (!installmentsOnly || expense.installment)
     && matchesSearch(search, expense.name));
   const rows = orderedTransactions(results.map(({ expense, receivedCents, netCents }) => ({
     transaction: expense, receivedCents, netCents,
   })), order);
   const total = results.reduce((sum, row) => sum + row.netCents, 0);
   const dashboardMonth = params.get("painelMes") ?? undefined;
+  const plansInPeriod = plannedInstallments.filter(plan => period.includes(plan.date));
+  const plans = plansInPeriod.filter(plan => (!category || plan.category === category) && matchesSearch(search, plan.name));
+  const plannedCents = plans.reduce((sum, plan) => sum + plan.amountCents, 0);
+  const transactionHref = (id: string) => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id });
 
   return (
-    <SectionCard id="gastos-filtrados" title="Compras no período">
-      <div className="report-filters">
-        <PeriodFields period={period} update={update} />
-        <ReportSelect label="Categoria" value={category} options={expenseCategoryOptions} onChange={value => update({ categoria: value })} />
-        <SearchField value={search} onChange={setSearch} />
-        <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
-      </div>
-      {live && <p className="report-muted">Os gastos incluem compras da fatura aberta até a data da consulta. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
-      <ReportMetrics items={[
-        { label: "Gasto líquido", value: formatMoney(total) },
-        { label: "Compras", value: String(rows.length) },
-      ]} />
-      <TransactionTable
-        label="Compras por categoria"
-        rows={rows}
-        getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id })}
-        showPaymentMethod
-      />
-    </SectionCard>
+    <>
+      <SectionCard id="gastos-filtrados" title="Compras no período">
+        <div className="report-filters">
+          <PeriodFields period={period} update={update} />
+          <ReportSelect label="Categoria" value={category} options={expenseCategoryOptions} onChange={value => update({ categoria: value })} />
+          <ReportSelect label="Tipo de compra" value={installmentsOnly ? "parcelada" : ""} options={[
+            { value: "", label: "Todas as compras" }, { value: "parcelada", label: "Parceladas" },
+          ]} onChange={value => update({ compra: value })} />
+          <SearchField value={search} onChange={setSearch} />
+          <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
+        </div>
+        {live && <p className="report-muted">Os gastos incluem compras da fatura aberta até a data da consulta. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
+        <ReportMetrics items={[
+          { label: "Gasto líquido", value: formatMoney(total) },
+          { label: "Compras", value: String(rows.length) },
+        ]} />
+        <TransactionTable
+          label="Compras por categoria"
+          rows={rows}
+          getHref={transactionHref}
+          showPaymentMethod
+          empty={installmentsOnly ? "Nenhuma parcela para os filtros selecionados." : undefined}
+        />
+      </SectionCard>
+      {plansInPeriod.length > 0 && (
+        <SectionCard id="parcelas-previstas" title="Parcelas previstas" description="Datas e valores estimados a partir da última parcela registrada de cada compra.">
+          {plans.length > 0 ? (
+            <>
+              <ReportMetrics items={[{ label: "Total previsto", value: formatMoney(plannedCents) }]} />
+              <BreakdownList rows={plans.map(plan => ({
+                key: plan.id,
+                label: (
+                  <>
+                    {plan.transactionId ? <Link className="report-link report-action" href={transactionHref(plan.transactionId)}>{plan.name}</Link> : plan.name}
+                    <span className="report-cell-detail">
+                      {plan.number}/{plan.count} · {formatNumericDate(plan.date)} · {plan.category}
+                    </span>
+                    <span className="report-cell-detail">
+                      {plan.date <= asOf ? "Aguardando lançamento" : "Parcela prevista"} · {plan.card}
+                    </span>
+                  </>
+                ),
+                value: formatMoney(plan.amountCents),
+              }))} />
+            </>
+          ) : <p className="report-muted">Nenhuma parcela prevista para os filtros selecionados.</p>}
+        </SectionCard>
+      )}
+    </>
   );
 }
 

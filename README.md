@@ -42,6 +42,10 @@ The dashboard uses a reproducible snapshot in [`frontend/src/data/mock-data.ts`]
 
 “Ritmo de gastos” and “Gastos por categoria” share the same net expense calculation. Expenses are categorized from their merchant type, and linked refunds reduce the original expense as of the reporting date. The daily comparison uses the previous three calendar months. For shorter months, it carries their closing total forward to the remaining days. The balance chart uses month-end snapshots and the latest balance for the open month.
 
+“Parcelas incluídas” shows the net amount of card installments already included in the selected month's categories. The link opens “Gastos por categoria” with “Tipo de compra” set to “Parceladas”.
+
+“Parcelas previstas” shows estimated dates and amounts separately in “Gastos por categoria” and “Cartões”. “Aguardando lançamento” marks a forecast whose estimated date has arrived. Forecasts have their own total.
+
 Use “Ver detalhes” to open the spending, account, card, or transaction report. Detail links carry the selected period, category, institution, card, or chart point in the URL. Spending reports share the dashboard's refund calculation, and account history uses the same balance snapshots for consolidated and institution-level views. The card fixtures specify invoice membership and due dates separately from purchase dates.
 
 In “Lançamentos” → “Reembolsos”, users can track pending, partial, and completed reimbursements and open the original purchase or individual receipts. Income and refund details support free-text classifications and tags. These annotations are stored in the current browser for the mock dataset and can be found through “Buscar lançamentos”.
@@ -114,7 +118,11 @@ The preview displays available BRL balances, posted transactions, and card charg
 
 “Gastos por categoria” displays “Forma de pagamento” for each expense. The snapshot uses the credit card account, reported payment method, or operation code, with fallbacks to recognizable descriptions and payment categories. Bank entries with an unspecified card type appear as “Cartão (tipo não informado)”. Entries with insufficient information appear as “Não identificada”.
 
-Card limit usage requires a reported total and available limit. Monthly balance history, open bill totals, future installments, and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
+The snapshot identifies card installments from the metadata reported by Pluggy and uses the individual transaction amount. The first installment uses the purchase date. Later installments use the bill posting date when available. Both fall back to the reported transaction date. Monthly and daily spending use the same calendar dates, including when the bill is due in a different month. Later installments enter the report as Pluggy supplies the records for their period. [Pluggy installment documentation](https://docs.pluggy.ai/en/docs/products/credit-card-installments) · [Transaction fields](https://docs.pluggy.ai/en/reference/transaction/transactions-retrieve)
+
+The backend generates the remaining installment estimates from the latest reported charge in an unambiguous purchase plan. It matches records on the same card using the purchase date, description and total installment count. Estimates use the latest installment amount and move one calendar month at a time, clamping dates to shorter months. A newly reported installment supersedes estimates through its sequence number. After a successful synchronization covers the second consecutive expected date without a charge, the plan's outstanding estimates are removed from the report. The backend rebuilds estimates on each snapshot, so a late charge can restore the remaining schedule. [Pluggy installment documentation](https://docs.pluggy.ai/en/docs/products/credit-card-installments) · [Pluggy synchronization](https://docs.pluggy.ai/en/docs/integration-checklist/data-sync)
+
+Card limit usage requires a reported total and available limit. Monthly balance history, open bill totals, and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
 
 ### Inspect a connection from the command line
 

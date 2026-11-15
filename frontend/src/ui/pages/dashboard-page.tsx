@@ -25,20 +25,21 @@ const twoColumns = "repeat(2, minmax(0, 1fr))";
 export function DashboardPage() {
   const { params, update } = useReportQuery();
   const {
-    accounts, asOf, cards: cardList, months, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
+    accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
     balanceHistory, balanceChartPoint, failedConnections, live,
   } = useFinancialReports();
   const currentDay = Number(asOf.slice(8));
   const balances = summarizeBalances(accountBalances(accounts));
   const cards = summarizeCards(cardList);
-  const categoryPeriods = months.map(month => categoryBreakdown(spending, month));
+  const categoryPeriods = planningMonths.map(month => categoryBreakdown(spending, month));
   const pacePoints = paceChartPoints(currentMonth);
   const comparison = canCompare(currentMonth);
   const history = balanceHistory().slice(1);
   const balancePoints = history.map(balanceChartPoint);
   const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
   const recentTransactions = live ? latest.slice(0, 10) : latest;
-  const month = optionValue(params.get("mes"), months, currentMonth);
+  const month = optionValue(params.get("mes"), planningMonths, currentMonth);
+  const plannedCents = plannedInstallments.reduce((sum, plan) => sum + (plan.date.startsWith(month) ? plan.amountCents : 0), 0);
   const [paceIndex, setPaceIndex] = useState(currentDay - 1);
   const [balanceIndex, setBalanceIndex] = useState(history.length - 1);
 
@@ -153,6 +154,9 @@ export function DashboardPage() {
           month={month}
           onMonthChange={value => update({ mes: value === currentMonth ? undefined : value })}
           getHref={category => details("/gastos", { mes: month, categoria: category })}
+          installmentsHref={details("/gastos", { mes: month, compra: "parcelada" })}
+          plannedCents={plannedCents}
+          plannedHref={`${details("/gastos", { mes: month, compra: "parcelada" })}#parcelas-previstas`}
         />
       </Box>
 

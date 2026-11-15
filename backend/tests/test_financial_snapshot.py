@@ -81,6 +81,87 @@ class FinancialSnapshotTests(TestCase):
             {**pending, "type": "CREDIT"}, ACCOUNT, "2026-11-14", card=True,
         ))
 
+    def test_installments_use_calendar_dates_even_when_the_bill_is_due_another_month(self):
+        for number, purchase, posting, forecast, expected in (
+            (1, "2026-10-31", "2026-11-01", "2026-11", "2026-10-31"),
+            (6, "2026-05-01", "2026-10-05", "2026-11", "2026-10-05"),
+            (2, "2026-10-31", "2026-11-10", "2026-12", "2026-11-10"),
+        ):
+            with self.subTest(number=number):
+                entry = normalize_transaction({
+                    **self.entry,
+                    "creditCardMetadata": {
+                        "installmentNumber": number, "totalInstallments": 6, "totalAmount": Decimal("92.82"),
+                        "purchaseDate": purchase, "billPostDate": posting, "billForecastDate": forecast,
+                    },
+                }, ACCOUNT, "2026-11-14", card=True)
+                self.assertEqual(entry["date"], expected)
+                self.assertEqual(entry["amountCents"], 1547)
+                self.assertEqual(entry["category"], "Alimentação")
+                self.assertEqual(entry["installment"], {"number": number, "count": 6})
+
+    def test_pending_installments_with_an_explicit_future_period_are_excluded(self):
+        pending = {**self.entry, "status": "PENDING"}
+        metadata = {"installmentNumber": 2, "totalInstallments": 3, "billForecastDate": "2026-12"}
+        self.assertIsNone(normalize_transaction(
+            {**pending, "creditCardMetadata": metadata}, ACCOUNT, "2026-11-14", card=True,
+        ))
+        entry = normalize_transaction(
+            {**pending, "creditCardMetadata": {**metadata, "billForecastDate": "2026-11"}},
+            ACCOUNT, "2026-11-14", card=True,
+        )
+        self.assertEqual(entry["date"], "2026-11-14")
+        self.assertEqual(entry["installment"], {"number": 2, "count": 3})
+        first = normalize_transaction(
+            {**pending, "creditCardMetadata": {**metadata, "installmentNumber": 1}},
+            ACCOUNT, "2026-11-14", card=True,
+        )
+        self.assertEqual(first["date"], "2026-11-14")
+
+    def test_installment_classification_uses_only_reported_card_purchase_metadata(self):
+        for metadata, expected in (
+            ({"paymentType": "SINGLE", "totalInstallments": 1, "installmentNumber": 1}, None),
+            ({"paymentType": "INSTALLMENT"}, {}),
+            ({"installmentNumber": 2}, {"number": 2}),
+            ({"installmentNumber": 2, "billForecastDate": "2026-13"}, {"number": 2}),
+            ({"installmentNumber": True, "totalInstallments": "6"}, None),
+        ):
+            with self.subTest(metadata=metadata):
+                raw = {**self.entry, "creditCardMetadata": metadata}
+                entry = normalize_transaction(raw, ACCOUNT, "2026-11-14", card=True)
+                self.assertEqual(entry.get("installment"), expected)
+                bank_entry = normalize_transaction(raw, ACCOUNT, "2026-11-14", card=False)
+                self.assertNotIn("installment", bank_entry)
+        transfer = {
+            **self.entry, "description": "Pagamento de fatura",
+            "creditCardMetadata": {"installmentNumber": 1, "totalInstallments": 3},
+        }
+        self.assertNotIn("installment", normalize_transaction(transfer, ACCOUNT, "2026-11-14", card=True))
+
+    def test_card_snapshot_keeps_projections_out_of_transactions_and_expires_them_after_sync(self):
+        card = {"id": ACCOUNT, "type": "CREDIT", "subtype": "CREDIT_CARD", "currencyCode": "BRL"}
+        first = {
+            **self.entry, "date": "2026-10-16", "description": "Store PARC 01/03 City",
+            "creditCardMetadata": {"installmentNumber": 1, "totalInstallments": 3, "purchaseDate": "2026-10-16"},
+        }
+        for item, expected in (
+            ({"executionStatus": "SUCCESS", "lastUpdatedAt": "2026-12-15"}, [2, 3]),
+            ({"executionStatus": "SUCCESS", "lastUpdatedAt": "2026-12-16"}, []),
+            ({
+                "executionStatus": "PARTIAL_SUCCESS", "lastUpdatedAt": "2026-12-17",
+                "statusDetail": {"transactions": {"isUpdated": False}},
+            }, [2, 3]),
+        ):
+            with (
+                self.subTest(item=item),
+                patch.object(pluggy, "meu_pluggy_item", return_value=item),
+                patch.object(pluggy, "accounts", return_value=[card]),
+                patch.object(pluggy, "transactions", return_value=[first]),
+            ):
+                _, cards, entries = load_item(UUID(ACCOUNT), "test", "2026-12-17", "Mock Bank", {})
+                self.assertEqual([row["installment"]["number"] for row in entries], [1])
+                self.assertEqual([row["number"] for row in cards[0]["installments"]], expected)
+
     def test_card_direction_falls_back_to_the_signed_amount_if_absent(self):
         purchase = {**self.entry, "type": None}
         entry = normalize_transaction(purchase, ACCOUNT, "2026-11-14", card=True)

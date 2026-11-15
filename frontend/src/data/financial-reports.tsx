@@ -16,6 +16,14 @@ function buildReports(data: FinancialData, live: boolean) {
     currentMonth, ...reportedTransactions.map(transaction => transaction.date.slice(0, 7)),
   ])].sort().reverse();
   const monthOptions = months.map(month => ({ value: month, label: formatMonth(month) }));
+  const plannedInstallments = cards.flatMap(card => card.installments.map(installment => ({
+    ...installment, card: cardLabel(card),
+  }))).sort((first, second) => first.date.localeCompare(second.date));
+  const lastPlannedDate = plannedInstallments.at(-1)?.date;
+  let planningMaxDate = asOf;
+  if (lastPlannedDate && lastPlannedDate > asOf) planningMaxDate = lastPlannedDate;
+  const planningMonths = [...new Set([...months, ...plannedInstallments.map(plan => plan.date.slice(0, 7))])].sort().reverse();
+  const planningMonthOptions = planningMonths.map(month => ({ value: month, label: formatMonth(month) }));
   const spending = spendingByMonth(reportedTransactions, asOf);
   const expenses = expensesWithRefunds(reportedTransactions, asOf);
   const trackedRefunds = expenses.filter(({ expense, refunds }) => expense.expectsRefund || refunds.length > 0);
@@ -61,6 +69,7 @@ function buildReports(data: FinancialData, live: boolean) {
 
   return {
     ...data, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
+    plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
     expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
   };
 }

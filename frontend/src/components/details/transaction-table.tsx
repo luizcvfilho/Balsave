@@ -58,6 +58,7 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
         {rows.map(({ transaction, netCents, receivedCents, annotation }) => {
           const source = transactionSource(transaction);
           const paymentMethod = transaction.paymentMethod ?? (transaction.cardId ? "credit_card" : undefined);
+          const installment = transaction.kind === "expense" ? transaction.installment : undefined;
           return (
             <tr role="row" key={transaction.id}>
               <td role="cell" className="report-transaction-name">
@@ -65,6 +66,11 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
                   {transaction.name}
                 </Link>
                 {source && <span className="report-cell-detail">{source}</span>}
+                {installment && <span className="report-cell-detail">
+                  {installment.number
+                    ? `Parcela ${installment.number}${installment.count ? `/${installment.count}` : ""}`
+                    : "Compra parcelada"}
+                </span>}
                 {annotation && <span className="report-cell-detail">{annotation}</span>}
               </td>
               <td role="cell" className="report-transaction-category">{transactionCategory(transaction)}</td>

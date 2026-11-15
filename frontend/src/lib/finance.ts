@@ -32,7 +32,13 @@ export type Transaction = {
   cardId?: string;
   paymentMethod?: keyof typeof paymentMethodLabels;
 } & (
-  | { kind: "expense"; merchantType?: string; category?: string; expectsRefund?: boolean }
+  | {
+    kind: "expense";
+    merchantType?: string;
+    category?: string;
+    expectsRefund?: boolean;
+    installment?: { number?: number; count?: number };
+  }
   | { kind: "refund"; expenseId: string }
   | { kind: "income" }
   | { kind: "credit" }
@@ -140,7 +146,7 @@ export function expensesWithRefunds(transactions: readonly Transaction[], asOf: 
 }
 
 export function spendingByMonth(transactions: readonly Transaction[], asOf: string) {
-  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number> }>();
+  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number>; installmentCents: number }>();
   for (const { expense, netCents } of expensesWithRefunds(transactions, asOf)) {
     if (netCents === 0) continue;
 
@@ -148,23 +154,28 @@ export function spendingByMonth(transactions: readonly Transaction[], asOf: stri
     const day = Number(expense.date.slice(8));
     let period = months.get(month);
     if (!period) {
-      period = { dailyCents: Array<number>(daysInMonth(month)).fill(0), categoryCents: new Map() };
+      period = { dailyCents: Array<number>(daysInMonth(month)).fill(0), categoryCents: new Map(), installmentCents: 0 };
       months.set(month, period);
     }
 
     period.dailyCents[day - 1] += netCents;
     const category = transactionCategory(expense);
     period.categoryCents.set(category, (period.categoryCents.get(category) ?? 0) + netCents);
+    if (expense.installment) period.installmentCents += netCents;
   }
 
   return months;
 }
 
 export function categoryBreakdown(spending: ReturnType<typeof spendingByMonth>, month: string) {
-  const entries = spending.get(month)?.categoryCents ?? [];
+  const period = spending.get(month);
+  const entries = period?.categoryCents ?? [];
   const categories = Array.from(entries, ([name, cents]) => ({ name, cents }))
     .sort((first, second) => second.cents - first.cents);
-  return { month, categories, totalCents: categories.reduce((sum, { cents }) => sum + cents, 0) };
+  return {
+    month, categories, installmentCents: period?.installmentCents ?? 0,
+    totalCents: categories.reduce((sum, { cents }) => sum + cents, 0),
+  };
 }
 
 function cumulativeSpending(dailyCents: readonly number[]) {

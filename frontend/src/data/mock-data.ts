@@ -1,4 +1,5 @@
-import type { AccountBalance, CreditCard, Transaction } from "../lib/finance";
+import type { AccountBalance, Transaction } from "../lib/finance";
+import type { ReportCard } from "./financial-data";
 
 // The fixture represents a fixed reporting date in America/Sao_Paulo.
 export const mockAsOf = "2026-11-14";
@@ -10,29 +11,24 @@ export const mockAccounts = [
   { id: "inter-conta", bank: "Inter", name: "Conta digital", balanceCents: 320000 },
 ] satisfies (AccountBalance & { id: string; name: string })[];
 
-type Installment = { name: string; month: string; number: number; count: number; amountCents: number };
-type MockCard = CreditCard & {
-  id: string;
-  openInvoice: { dueDate: string; transactionIds: string[] };
-  installments: Installment[];
-};
-
 export const mockCards = [
   {
     id: "itau-4821", bank: "Itaú", lastFour: "4821", usedCents: 248000, limitCents: 900000,
-    openInvoice: { dueDate: "2026-11-26", transactionIds: ["hotel"] },
+    openInvoice: { dueDate: "2026-11-26", transactionIds: ["hotel", "notebook-2"] },
     installments: ["2026-12", "2027-01", "2027-02", "2027-03"].map((month, index) => ({
-      name: "Notebook", month, number: index + 3, count: 6, amountCents: 42000,
+      id: `notebook-plan-${month}`, transactionId: "notebook-1", name: "Notebook", category: "Compras",
+      date: `${month}-13`, number: index + 3, count: 6, amountCents: 42000,
     })),
   },
   {
     id: "nubank-7032", bank: "Nubank", lastFour: "7032", usedCents: 124840, limitCents: 600000,
     openInvoice: { dueDate: "2026-11-24", transactionIds: ["restaurant", "cinema"] },
     installments: ["2026-12", "2027-01", "2027-02"].map((month, index) => ({
-      name: "Cadeira ergonômica", month, number: index + 4, count: 6, amountCents: 35020,
+      id: `chair-plan-${month}`, name: "Cadeira ergonômica", category: "Moradia",
+      date: `${month}-24`, number: index + 4, count: 6, amountCents: 35020,
     })),
   },
-] satisfies MockCard[];
+] satisfies ReportCard[];
 
 export const mockBalanceSnapshots = [
   { month: "2026-05", balances: [438000, 164000, 330000, 250000] },
@@ -119,6 +115,8 @@ export const mockTransactions: Transaction[] = [
   ...historicalPurchases,
   { id: "booking", date: "2026-09-20", kind: "expense", name: "Reserva cancelada", merchantType: "hotel", amountCents: 45900, accountId: "inter-conta" },
   { id: "booking-refund", date: "2026-09-23", kind: "refund", name: "Reembolso da reserva", expenseId: "booking", amountCents: 45900, accountId: "inter-conta" },
+  { id: "notebook-1", date: "2026-10-26", kind: "expense", name: "Notebook", category: "Compras", amountCents: 42000, cardId: "itau-4821", installment: { number: 1, count: 6 } },
+  { id: "course-6", date: "2026-10-27", kind: "expense", name: "Curso", category: "Educação", amountCents: 8500, cardId: "itau-4821", installment: { number: 6, count: 6 } },
   { id: "market", date: "2026-11-02", kind: "expense", name: "Supermercado", merchantType: "groceries", amountCents: 18420, accountId: "nubank-conta" },
   { id: "salary", date: "2026-11-05", kind: "income", name: "Salário", amountCents: 685000, accountId: "itau-corrente" },
   { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000, accountId: "itau-corrente", paymentMethod: "pix" },
@@ -129,6 +127,7 @@ export const mockTransactions: Transaction[] = [
   { id: "hotel-refund", date: "2026-11-11", kind: "refund", name: "Reembolso do hotel", expenseId: "hotel", amountCents: 50000, accountId: "itau-corrente" },
   { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850, accountId: "nubank-conta" },
   { id: "card-payment", date: "2026-11-13", kind: "transfer", name: "Pagamento de fatura", amountCents: 160000, accountId: "itau-corrente" },
+  { id: "notebook-2", date: "2026-11-13", kind: "expense", name: "Notebook", category: "Compras", amountCents: 42000, cardId: "itau-4821", installment: { number: 2, count: 6 } },
   { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500, accountId: "nubank-conta", paymentMethod: "debit_card" },
 ];
 

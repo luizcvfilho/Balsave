@@ -27,15 +27,19 @@ function readDate(value: string | null, asOf: string) {
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().startsWith(value) ? value : "";
 }
 
-export function usePeriod(params: URLSearchParams, defaultMonth?: string) {
-  const { asOf, currentMonth, months } = useFinancialReports();
-  const month = optionValue(params.get("mes"), [...months, "todos", "personalizado"], defaultMonth ?? currentMonth);
-  const from = month === "personalizado" ? readDate(params.get("de"), asOf) : "";
-  const to = month === "personalizado" ? readDate(params.get("ate"), asOf) : "";
+export function usePeriod(params: URLSearchParams, defaultMonth?: string, includePlans = false) {
+  const { asOf, currentMonth, monthOptions, planningMonthOptions, planningMaxDate } = useFinancialReports();
+  const options = includePlans ? planningMonthOptions : monthOptions;
+  const maxDate = includePlans ? planningMaxDate : asOf;
+  const month = optionValue(params.get("mes"), [...options.map(option => option.value), "todos", "personalizado"], defaultMonth ?? currentMonth);
+  const from = month === "personalizado" ? readDate(params.get("de"), maxDate) : "";
+  const to = month === "personalizado" ? readDate(params.get("ate"), maxDate) : "";
   return {
     month,
     from,
     to,
+    options,
+    maxDate,
     includes(date: string) {
       if (month === "personalizado") return (!from || date >= from) && (!to || date <= to);
       return month === "todos" || date.startsWith(month);
@@ -47,13 +51,12 @@ export function PeriodFields({ period, update }: {
   period: ReturnType<typeof usePeriod>;
   update: (values: Record<string, string | undefined>) => void;
 }) {
-  const { asOf, monthOptions } = useFinancialReports();
   return (
     <>
       <ReportSelect
         label="Período"
         value={period.month}
-        options={[...monthOptions, { value: "todos", label: "Todo o histórico" }, { value: "personalizado", label: "Personalizado" }]}
+        options={[...period.options, { value: "todos", label: "Todo o histórico" }, { value: "personalizado", label: "Personalizado" }]}
         onChange={month => update({ mes: month, de: undefined, ate: undefined })}
       />
       {period.month === "personalizado" && (
@@ -61,9 +64,9 @@ export function PeriodFields({ period, update }: {
           <label className="report-field">
             <span>Data inicial</span>
             <input
-              type="date" max={period.to || asOf} value={period.from}
+              type="date" max={period.to || period.maxDate} value={period.from}
               onChange={event => {
-                const date = readDate(event.target.value, asOf);
+                const date = readDate(event.target.value, period.maxDate);
                 if (!date || !period.to || date <= period.to) update({ de: date });
               }}
             />
@@ -71,9 +74,9 @@ export function PeriodFields({ period, update }: {
           <label className="report-field">
             <span>Data final</span>
             <input
-              type="date" min={period.from || undefined} max={asOf} value={period.to}
+              type="date" min={period.from || undefined} max={period.maxDate} value={period.to}
               onChange={event => {
-                const date = readDate(event.target.value, asOf);
+                const date = readDate(event.target.value, period.maxDate);
                 if (!date || !period.from || date >= period.from) update({ ate: date });
               }}
             />

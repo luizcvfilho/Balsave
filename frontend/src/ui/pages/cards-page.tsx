@@ -24,7 +24,7 @@ function limitMetrics({ limitCents, usedCents, availableCents }: Pick<ReportCard
 
 export function CardsPage() {
   const { params, href } = useReportQuery();
-  const { cards, live, reportedTransactions } = useFinancialReports();
+  const { asOf, cards, live, reportedTransactions } = useFinancialReports();
   const totals = summarizeCards(cards);
   const activeCard = cards.find(card => card.id === params.get("cartao"));
   const dashboardMonth = params.get("painelMes");
@@ -54,38 +54,38 @@ export function CardsPage() {
         </ul>
       </SectionCard>
       {activeCard && openInvoice && (
-        <>
-          <SectionCard id="fatura" title="Fatura aberta" description={cardLabel(activeCard)}>
-            <ReportMetrics items={[
-              { label: "Total da fatura aberta", value: formatMoney(invoice) },
-              { label: "Vencimento", value: formatDate(openInvoice.dueDate) },
-            ]} />
-            <TransactionTable
-              label="Compras da fatura aberta"
-              rows={orderedTransactions(charges.map(transaction => ({ transaction })))}
-              getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth ?? undefined, lancamento: id })}
-              empty="Nenhuma compra nesta fatura."
-            />
-          </SectionCard>
-          <SectionCard id="parcelas" title="Parcelas futuras">
-            {activeCard.installments.length > 0 ? (
-              <BreakdownList rows={activeCard.installments.map(installment => ({
-                key: `${installment.name}/${installment.month}/${installment.number}`,
-                label: `${formatMonth(installment.month)} · ${installment.name} · ${installment.number}/${installment.count}`,
-                value: formatMoney(installment.amountCents),
-              }))} />
-            ) : <p className="report-muted">Nenhuma parcela futura.</p>}
-          </SectionCard>
-        </>
+        <SectionCard id="fatura" title="Fatura aberta" description={cardLabel(activeCard)}>
+          <ReportMetrics items={[
+            { label: "Total da fatura aberta", value: formatMoney(invoice) },
+            { label: "Vencimento", value: formatDate(openInvoice.dueDate) },
+          ]} />
+          <TransactionTable
+            label="Compras da fatura aberta"
+            rows={orderedTransactions(charges.map(transaction => ({ transaction })))}
+            getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth ?? undefined, lancamento: id })}
+            empty="Nenhuma compra nesta fatura."
+          />
+        </SectionCard>
       )}
       {activeCard && live && (
         <SectionCard id="fatura" title="Lançamentos do cartão" description={cardLabel(activeCard)}>
-          <p className="report-muted">O total da fatura aberta e as parcelas futuras estão indisponíveis nesta consulta.</p>
+          <p className="report-muted">O total da fatura aberta está indisponível nesta consulta.</p>
           <TransactionTable
             label="Lançamentos do cartão até a data da consulta"
             rows={orderedTransactions(cardEntries.map(transaction => ({ transaction })))}
             getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth ?? undefined, lancamento: id })}
           />
+        </SectionCard>
+      )}
+      {activeCard && (
+        <SectionCard id="parcelas" title="Parcelas previstas" description="Datas e valores estimados a partir da última parcela registrada de cada compra.">
+          {activeCard.installments.length > 0 ? (
+            <BreakdownList rows={activeCard.installments.map(installment => ({
+              key: installment.id,
+              label: `${formatMonth(installment.date.slice(0, 7))} · ${installment.name} · ${installment.number}/${installment.count}${installment.date <= asOf ? " · Aguardando lançamento" : ""}`,
+              value: formatMoney(installment.amountCents),
+            }))} />
+          ) : <p className="report-muted">Nenhuma parcela prevista.</p>}
         </SectionCard>
       )}
     </ReportLayout>
