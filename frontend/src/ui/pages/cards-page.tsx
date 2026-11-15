@@ -7,7 +7,7 @@ import { ReportLayout } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
-import type { ReportCard } from "../../data/financial-data";
+import { cardLabel, type ReportCard } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
 import { summarizeCards } from "../../lib/finance";
 import { formatAvailableMoney, formatDate, formatMoney, formatMonth } from "../../lib/format";
@@ -46,7 +46,7 @@ export function CardsPage() {
           {cards.map(card => (
             <li key={card.id} className="report-list-item">
               <Link className="report-link report-action" href={`${href({ cartao: card.id })}#fatura`} aria-current={activeCard?.id === card.id ? "true" : undefined}>
-                {card.bank} · {card.lastFour ? `final ${card.lastFour}` : "Cartão"}
+                {cardLabel(card)}
               </Link>
               <ReportMetrics items={limitMetrics(card)} />
             </li>
@@ -55,7 +55,7 @@ export function CardsPage() {
       </SectionCard>
       {activeCard && openInvoice && (
         <>
-          <SectionCard id="fatura" title="Fatura aberta" description={`${activeCard.bank} · final ${activeCard.lastFour}`}>
+          <SectionCard id="fatura" title="Fatura aberta" description={cardLabel(activeCard)}>
             <ReportMetrics items={[
               { label: "Total da fatura aberta", value: formatMoney(invoice) },
               { label: "Vencimento", value: formatDate(openInvoice.dueDate) },
@@ -79,7 +79,7 @@ export function CardsPage() {
         </>
       )}
       {activeCard && live && (
-        <SectionCard id="fatura" title="Lançamentos do cartão" description={activeCard.bank}>
+        <SectionCard id="fatura" title="Lançamentos do cartão" description={cardLabel(activeCard)}>
           <p className="report-muted">Fatura aberta e parcelas futuras indisponíveis nesta consulta.</p>
           <TransactionTable
             label="Lançamentos efetivados do cartão"

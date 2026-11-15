@@ -14,7 +14,7 @@ import { LineChart } from "../../components/charts/line-chart";
 import { RecentTransactions } from "../../components/dashboard/recent-transactions";
 import { SpendingCategories } from "../../components/dashboard/spending-categories";
 import { useReportQuery } from "../../components/details/report-query";
-import { accountBalances } from "../../data/financial-data";
+import { accountBalances, cardLabel } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
 import { categoryBreakdown, summarizeBalances, summarizeCards } from "../../lib/finance";
 import { formatAvailableMoney, formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
@@ -107,18 +107,18 @@ export function DashboardPage() {
               </Typography>
             </Stack>
           )}
-          rows={cardList.map(({ id, bank, lastFour, usedCents, limitCents }) => ({
-            key: id,
+          rows={cardList.map(card => ({
+            key: card.id,
             label: (
-              <Link className="report-link report-action" href={details("/cartoes", { cartao: id })}>
-                <span>{bank} · {lastFour ? `final ${lastFour}` : "Cartão"}</span>
+              <Link className="report-link report-action" href={details("/cartoes", { cartao: card.id })}>
+                {cardLabel(card)}
               </Link>
             ),
             value: (
               <>
-                {formatAvailableMoney(usedCents)}{" "}
+                {formatAvailableMoney(card.usedCents)}{" "}
                 <Typography component="span" variant="inherit" color="var(--text-secondary)" sx={{ fontWeight: 400 }}>
-                  / {formatAvailableMoney(limitCents)}
+                  / {formatAvailableMoney(card.limitCents)}
                 </Typography>
               </>
             ),

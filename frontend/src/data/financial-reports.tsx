@@ -6,7 +6,7 @@ import {
   type Transaction, transactionCategory,
 } from "../lib/finance";
 import { formatDate, formatMonth, formatMonthName, formatShortMonth } from "../lib/format";
-import type { FinancialData } from "./financial-data";
+import { cardLabel, type FinancialData } from "./financial-data";
 
 function buildReports(data: FinancialData, live: boolean) {
   const { accounts, asOf, balanceSnapshots, cards } = data;
@@ -23,7 +23,7 @@ function buildReports(data: FinancialData, live: boolean) {
     .sort((first, second) => first.localeCompare(second, "pt-BR"));
   const sources = new Map(accounts.map(account => [account.id, `${account.bank} · ${account.name}`]));
   for (const card of cards) {
-    sources.set(card.id, `${card.bank} · ${card.lastFour ? `Cartão final ${card.lastFour}` : "Cartão"}`);
+    sources.set(card.id, cardLabel(card));
   }
 
   function paceChartPoints(month: string) {

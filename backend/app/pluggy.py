@@ -184,6 +184,19 @@ def accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
     return results(request("/accounts?" + urlencode({"itemId": item_id}), api_key=api_key))
 
 
+def institutions(api_key: str) -> Iterator[dict[str, Any]]:
+    page = 1
+    while True:
+        data = request(f"/payments/recipients/institutions?page={page}&pageSize=500", api_key=api_key)
+        total_pages = data.get("totalPages")
+        if data.get("page") != page or type(total_pages) is not int or total_pages < 0:
+            raise PluggyError("Pluggy returned invalid institution pagination.")
+        yield from results(data)
+        if page >= total_pages:
+            return
+        page += 1
+
+
 def inspect_sandbox(item_id: UUID, api_key: str, *, wait: bool = False) -> dict[str, Any]:
     item = sandbox_item(item_id, api_key, wait=wait)
     return {"executionStatus": item.get("executionStatus"), "accounts": inspect_accounts(item_id, api_key)}

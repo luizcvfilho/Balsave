@@ -8,6 +8,7 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
 
 export type ReportCard = CreditCard & {
   id: string;
+  name?: string;
   availableCents?: number | null;
   openInvoice: { dueDate: string; transactionIds: string[] } | null;
   installments: { name: string; month: string; number: number; count: number; amountCents: number }[];
@@ -23,6 +24,12 @@ export type FinancialData = {
   connectionCount: number;
   failedConnections: number;
 };
+
+export function cardLabel({ bank, name, lastFour }: Pick<ReportCard, "bank" | "name" | "lastFour">) {
+  const product = name?.toLocaleLowerCase("pt-BR") === bank.toLocaleLowerCase("pt-BR") ? undefined : name;
+  const ending = lastFour ? `final ${lastFour}` : undefined;
+  return [bank, product, ending ?? (product ? undefined : "Cartão")].filter(Boolean).join(" · ");
+}
 
 export function accountBalances(accounts: ReportAccount[]) {
   return accounts.flatMap(account => account.balanceCents === null ? [] : [{

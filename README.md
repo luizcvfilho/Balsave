@@ -108,6 +108,8 @@ Run the `psql` command once `pg_isready` reports that the server is accepting co
 
 The preview uses one local owner and a secure, HTTP-only session cookie. Pluggy API credentials stay in FastAPI. Only the short-lived Connect Token reaches the widget. Migration `0003` creates a local owner and stores the Pluggy item references so they are available after restart. Financial records are read on demand and kept in memory for up to five minutes. Clear `BALSAVE_PREVIEW_PASSWORD` and restart the stack to use the demo.
 
+The preview matches the bank code reported on an account to Pluggy's institution directory. Cards use the same institution when the connection reports a single bank code, along with the card product name and last four digits when available. A connection label is used when the institution cannot be identified. [Pluggy accounts](https://docs.pluggy.ai/en/docs/products/accounts) · [Institution directory](https://docs.pluggy.ai/en/reference/payment-recipient/payment-recipients-institution-list)
+
 The preview displays available BRL balances and posted BRL transactions, including foreign-currency card purchases when Pluggy provides the amount in the card's BRL currency. Card limit usage requires a reported total and available limit. Monthly balance history, open bills, future installments, and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
 
 ### Inspect a connection from the command line

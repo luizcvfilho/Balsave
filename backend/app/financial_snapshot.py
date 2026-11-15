@@ -56,6 +56,33 @@ def label(value: object) -> str:
     return value.strip()[:200] if isinstance(value, str) else ""
 
 
+def bank_code(account: dict[str, Any]) -> str | None:
+    bank_data = account.get("bankData")
+    number = bank_data.get("transferNumber") if isinstance(bank_data, dict) else None
+    if not isinstance(number, str):
+        return None
+    parts = [part.strip() for part in number.split("/")]
+    if len(parts) == 3 and re.fullmatch(r"[0-9]{3}", parts[0]) and all(parts[1:]):
+        return parts[0]
+    return None
+
+
+def institution_names(api_key: str) -> dict[str, str]:
+    names: dict[str, str] = {}
+    conflicts: set[str] = set()
+    try:
+        for institution in pluggy.institutions(api_key):
+            code = institution.get("compe")
+            name = label(institution.get("tradeName")) or label(institution.get("name"))
+            if isinstance(code, str) and re.fullmatch(r"[0-9]{3}", code) and name:
+                if code in names and names[code] != name:
+                    conflicts.add(code)
+                names[code] = name
+    except pluggy.PluggyError:
+        return {}
+    return {code: name for code, name in names.items() if code not in conflicts}
+
+
 def identifier(value: object) -> str:
     try:
         return str(UUID(str(value)))
@@ -118,9 +145,11 @@ def normalize_card(raw: dict[str, Any], account_id: str, bank: str) -> dict:
     limit = None if flexible else cents(credit.get("creditLimit"))
     available = None if flexible else cents(credit.get("availableCreditLimit"))
     last_four = re.search(r"[0-9]{4}$", label(raw.get("number")))
+    name = label(raw.get("marketingName")) or label(raw.get("name"))
     return {
         "id": account_id,
         "bank": bank,
+        "name": name,
         "lastFour": last_four.group() if last_four else "",
         "limitCents": limit,
         "availableCents": available,
@@ -130,15 +159,22 @@ def normalize_card(raw: dict[str, Any], account_id: str, bank: str) -> dict:
     }
 
 
-def load_item(item_id: UUID, api_key: str, as_of: str, bank: str) -> tuple[list[dict], list[dict], list[dict]]:
+def load_item(
+    item_id: UUID, api_key: str, as_of: str, fallback_bank: str, bank_names: dict[str, str],
+) -> tuple[list[dict], list[dict], list[dict]]:
     pluggy.meu_pluggy_item(item_id, api_key)
+    records = pluggy.accounts(item_id, api_key)
+    codes = {code for raw in records if raw.get("type") == "BANK" and (code := bank_code(raw))}
+    connection_bank = bank_names.get(next(iter(codes)), fallback_bank) if len(codes) == 1 else fallback_bank
     accounts, cards, entries = [], [], []
-    for raw in pluggy.accounts(item_id, api_key):
+    for raw in records:
         if raw.get("currencyCode") != "BRL":
             continue
         account_id = identifier(raw.get("id"))
         if raw.get("itemId", str(item_id)) != str(item_id):
             raise pluggy.PluggyError("Pluggy returned an account for another connection.")
+        code = bank_code(raw)
+        bank = bank_names.get(code, fallback_bank) if code else connection_bank
         card = raw.get("type") == "CREDIT" and raw.get("subtype") == "CREDIT_CARD"
         if card:
             cards.append(normalize_card(raw, account_id, bank))
@@ -161,12 +197,13 @@ def load_item(item_id: UUID, api_key: str, as_of: str, bank: str) -> tuple[list[
 
 def load_snapshot(item_ids: tuple[UUID, ...], api_key: str) -> dict:
     as_of = datetime.now(REPORT_TIMEZONE).date().isoformat()
+    bank_names = institution_names(api_key)
     accounts, cards, entries = {}, {}, {}
     failed = 0
     for index, item_id in enumerate(item_ids, start=1):
         bank = f"Meu Pluggy · conexão {index}"
         try:
-            item_accounts, item_cards, item_entries = load_item(item_id, api_key, as_of, bank)
+            item_accounts, item_cards, item_entries = load_item(item_id, api_key, as_of, bank, bank_names)
         except pluggy.PluggyError:
             failed += 1
             continue
