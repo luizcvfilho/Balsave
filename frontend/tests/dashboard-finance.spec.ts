@@ -36,15 +36,17 @@ test("shares the net spend with refund tracking and counts only credits received
   expect(categoryBreakdown(spendingByMonth(transactions, "2026-11-14"), "2026-10").totalCents).toBe(2500);
 });
 
-test("ranks classified net expenses and excludes transfers, future entries, and refund credits", () => {
+test("combines bank and card expenses by category and excludes transfers and future entries", () => {
   const spending = spendingByMonth([
     { id: "hotel", name: "Hotel", kind: "expense", merchantType: "hotel", date: "2026-10-05", amountCents: 85000 },
     { id: "refund", name: "Refund", kind: "refund", expenseId: "hotel", date: "2026-11-02", amountCents: 60000 },
     { id: "late-refund", name: "Refund", kind: "refund", expenseId: "hotel", date: "2026-11-20", amountCents: 25000 },
-    { id: "market", name: "Market", kind: "expense", merchantType: "groceries", date: "2026-10-10", amountCents: 28500 },
-    { id: "restaurant", name: "Restaurant", kind: "expense", merchantType: "restaurant", date: "2026-10-12", amountCents: 14501 },
+    { id: "market", name: "Market", kind: "expense", merchantType: "groceries", accountId: "checking", date: "2026-10-10", amountCents: 28500 },
+    { id: "restaurant", name: "Restaurant", kind: "expense", category: "Alimentação", cardId: "card", date: "2026-10-12", amountCents: 14501 },
     { id: "other", name: "Other", kind: "expense", merchantType: "unknown", date: "2026-10-12", amountCents: 1000 },
     { id: "payment", name: "Card payment", kind: "transfer", date: "2026-10-13", amountCents: 150000 },
+    { id: "self-transfer", name: "Pix between own accounts", kind: "transfer", direction: "out", date: "2026-10-13", amountCents: 30000 },
+    { id: "investment", name: "BB Rende Fácil", kind: "transfer", direction: "out", date: "2026-10-13", amountCents: 50000 },
     { id: "salary", name: "Salary", kind: "income", date: "2026-10-14", amountCents: 700000 },
     { id: "future", name: "Market", kind: "expense", merchantType: "groceries", date: "2026-11-20", amountCents: 5000 },
   ], "2026-11-14");

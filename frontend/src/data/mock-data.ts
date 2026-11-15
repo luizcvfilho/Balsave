@@ -121,7 +121,7 @@ export const mockTransactions: Transaction[] = [
   { id: "booking-refund", date: "2026-09-23", kind: "refund", name: "Reembolso da reserva", expenseId: "booking", amountCents: 45900, accountId: "inter-conta" },
   { id: "market", date: "2026-11-02", kind: "expense", name: "Supermercado", merchantType: "groceries", amountCents: 18420, accountId: "nubank-conta" },
   { id: "salary", date: "2026-11-05", kind: "income", name: "Salário", amountCents: 685000, accountId: "itau-corrente" },
-  { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000, accountId: "itau-corrente" },
+  { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000, accountId: "itau-corrente", paymentMethod: "pix" },
   { id: "restaurant", date: "2026-11-07", kind: "expense", name: "Restaurante", merchantType: "restaurant", amountCents: 12580, cardId: "nubank-7032" },
   { id: "cinema", date: "2026-11-08", kind: "expense", name: "Cinema", merchantType: "cinema", amountCents: 7200, cardId: "nubank-7032" },
   { id: "hotel", date: "2026-11-09", kind: "expense", name: "Hotel", merchantType: "hotel", amountCents: 80000, cardId: "itau-4821" },
@@ -129,7 +129,7 @@ export const mockTransactions: Transaction[] = [
   { id: "hotel-refund", date: "2026-11-11", kind: "refund", name: "Reembolso do hotel", expenseId: "hotel", amountCents: 50000, accountId: "itau-corrente" },
   { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850, accountId: "nubank-conta" },
   { id: "card-payment", date: "2026-11-13", kind: "transfer", name: "Pagamento de fatura", amountCents: 160000, accountId: "itau-corrente" },
-  { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500, accountId: "nubank-conta" },
+  { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500, accountId: "nubank-conta", paymentMethod: "debit_card" },
 ];
 
 export const mockSpendingMonths = [mockAsOf.slice(0, 7), ...Object.keys(purchasesByMonth).reverse()];

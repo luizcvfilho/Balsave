@@ -131,7 +131,7 @@ export function DashboardPage() {
           id="ritmo"
           title="Ritmo de gastos"
           href={details("/gastos", { aba: "ritmo", dia: String(paceIndex + 1) })}
-          description={live ? "Gastos efetivados acumulados por dia do mês" : "Gasto líquido acumulado por dia do mês"}
+          description="Gasto líquido acumulado por dia do mês"
         >
           <LineChart
             points={pacePoints}

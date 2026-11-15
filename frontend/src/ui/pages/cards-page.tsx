@@ -80,9 +80,9 @@ export function CardsPage() {
       )}
       {activeCard && live && (
         <SectionCard id="fatura" title="Lançamentos do cartão" description={cardLabel(activeCard)}>
-          <p className="report-muted">Fatura aberta e parcelas futuras indisponíveis nesta consulta.</p>
+          <p className="report-muted">O total da fatura aberta e as parcelas futuras estão indisponíveis nesta consulta.</p>
           <TransactionTable
-            label="Lançamentos efetivados do cartão"
+            label="Lançamentos do cartão até a data da consulta"
             rows={orderedTransactions(cardEntries.map(transaction => ({ transaction })))}
             getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth ?? undefined, lancamento: id })}
           />

@@ -12,6 +12,7 @@ test("opens the month and category from the dashboard and keeps the month on ret
   await expect(page.getByLabel("Período", { exact: true })).toHaveValue("2026-10");
   await expect(page.getByLabel("Categoria", { exact: true })).toHaveValue("Alimentação");
   const purchases = page.getByRole("table", { name: "Compras por categoria" });
+  await expect(purchases.getByRole("columnheader", { name: "Forma de pagamento" })).toBeVisible();
   await expect(purchases.getByRole("link", { name: "Supermercado" })).toHaveCount(2);
   await expect(purchases.getByRole("link", { name: "Farmácia" })).toHaveCount(0);
   await page.getByLabel("Ordenar por").selectOption("highest");
@@ -80,6 +81,21 @@ test("opens the selected card with its invoice, due date, and future installment
 
 test.describe("mobile detail flows", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: "dark" });
+
+  test("shows payment methods for expenses without overflowing the mobile layout", async ({ page }) => {
+    await page.goto("/gastos?mes=2026-11");
+    const purchases = page.getByRole("table", { name: "Compras por categoria" });
+    for (const [name, method] of [
+      ["Restaurante", "Cartão de crédito"],
+      ["Aluguel", "Pix"],
+      ["Compra no débito", "Cartão de débito"],
+      ["Supermercado", "Não identificada"],
+    ]) {
+      const row = purchases.getByRole("row").filter({ has: page.getByRole("link", { name, exact: true }) });
+      await expect(row.getByRole("cell", { name: method, exact: true })).toBeVisible();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  });
 
   test("tracks refunds inside the ledger and saves receipt tags locally", async ({ page }) => {
     await page.goto("/");

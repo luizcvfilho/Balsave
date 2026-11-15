@@ -10,6 +10,19 @@ export type CreditCard = {
   limitCents: number | null;
 };
 
+export const paymentMethodLabels = {
+  credit_card: "Cartão de crédito",
+  debit_card: "Cartão de débito",
+  card: "Cartão (tipo não informado)",
+  pix: "Pix",
+  boleto: "Boleto",
+  ted: "TED",
+  doc: "DOC",
+  bank_transfer: "Transferência bancária",
+  automatic_debit: "Débito automático",
+  check: "Cheque",
+};
+
 export type Transaction = {
   id: string;
   date: string;
@@ -17,6 +30,7 @@ export type Transaction = {
   amountCents: number;
   accountId?: string;
   cardId?: string;
+  paymentMethod?: keyof typeof paymentMethodLabels;
 } & (
   | { kind: "expense"; merchantType?: string; category?: string; expectsRefund?: boolean }
   | { kind: "refund"; expenseId: string }

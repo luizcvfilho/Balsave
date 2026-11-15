@@ -28,6 +28,45 @@ CATEGORIES = {
     "travel": "Viagem",
 }
 
+INVESTMENT_CATEGORIES = {
+    "investments", "automatic investment", "fixed income", "mutual funds",
+    "variable income", "margin", "pension",
+}
+INVESTMENT_MOVEMENT = re.compile(
+    r"^(?:(?:aplic(?:acao)?|resg(?:ate)?|cdb)[.\s-]+)*(?:bb[.\s-]+)?rende?[.\s-]+facil\b"
+    r"|^(?:aplic(?:acao)?|aporte|resg(?:ate)?)[.\s-]+(?:(?:em|d[aeo])[.\s-]+)?"
+    r"(?:automatic[ao]|financeir[ao]|investimentos?|fundos?|cdb|rdb|lci|lca|tesouro direto)\b"
+)
+PAYMENT_METHOD_CODES = {
+    "PIX": "pix",
+    "BOLETO": "boleto",
+    "TED": "ted",
+    "DOC": "doc",
+    "TEF": "bank_transfer",
+    "TRANSFERENCIA_MESMA_INSTITUICAO": "bank_transfer",
+}
+PAYMENT_METHOD_CATEGORIES = {
+    "pix": "pix",
+    "transfer - pix": "pix",
+    "bank slip": "boleto",
+    "transfer - bank slip (boleto)": "boleto",
+    "ted": "ted",
+    "transfer - ted": "ted",
+    "doc": "doc",
+    "transfer - doc": "doc",
+    "transfer - internal": "bank_transfer",
+    "debt card": "debit_card",
+    "transfer - check": "check",
+}
+PAYMENT_METHOD_DESCRIPTIONS = {
+    "pix": re.compile(r"^(?:(?:pagamento|transferencia)(?: via| por)?\s+)?pix\b"),
+    "boleto": re.compile(r"^(?:(?:pagamento|pgto\.?)(?: de)?\s+)?boleto\b"),
+    "ted": re.compile(r"^(?:ted(?:$|\s*[-:]|\s+enviad[ao]\b)|transferencia via ted\b)"),
+    "doc": re.compile(r"^(?:doc(?:$|\s*[-:]|\s+enviad[ao]\b)|transferencia via doc\b)"),
+    "debit_card": re.compile(r"^(?:cartao de debito|compra (?:no|com) (?:cartao de )?debito)\b"),
+    "automatic_debit": re.compile(r"^debito automatico\b"),
+}
+
 
 def cents(value: object) -> int | None:
     if type(value) not in (int, Decimal):
@@ -90,24 +129,108 @@ def identifier(value: object) -> str:
         raise pluggy.PluggyError("Pluggy returned an invalid record ID.") from None
 
 
-def transaction_kind(raw: dict[str, Any], name: str, card: bool, direction: str) -> str:
-    operation = raw.get("operationType")
-    category = label(raw.get("category")).casefold()
-    plain_name = "".join(
-        char for char in unicodedata.normalize("NFD", name.casefold())
+def plain_text(value: object) -> str:
+    return "".join(
+        char for char in unicodedata.normalize("NFD", label(value).casefold())
         if not unicodedata.combining(char)
     )
-    if (operation in ("PAGAMENTO_FATURA", "TRANSFERENCIA_MESMA_INSTITUICAO")
-        or category == "credit card payment" or category.startswith("same person transfer")
-        or re.search(r"\bpagamento (?:d[ae] )?fatura\b", plain_name)):
+
+
+def tax_document(value: object) -> str | None:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9./-]+", value.strip()):
+        return None
+    digits = re.sub(r"[^0-9]", "", value)
+    return digits if len(digits) in (11, 14) and len(set(digits)) > 1 else None
+
+
+def participant_document(participant: object) -> str | None:
+    document = participant.get("documentNumber") if isinstance(participant, dict) else None
+    return tax_document(document.get("value")) if isinstance(document, dict) else None
+
+
+def same_owner_transfer(payment: object, direction: str, owner_document: str | None) -> bool:
+    if not isinstance(payment, dict):
+        return False
+    payer = participant_document(payment.get("payer"))
+    receiver = participant_document(payment.get("receiver"))
+    if direction == "DEBIT":
+        payer = payer or owner_document
+    else:
+        receiver = receiver or owner_document
+    return payer is not None and payer == receiver
+
+
+def transaction_kind(
+    raw: dict[str, Any], card: bool, direction: str, owner_document: str | None,
+) -> str:
+    operation = raw.get("operationType")
+    category = label(raw.get("category")).casefold()
+    descriptions = [plain_text(raw.get(field)) for field in ("description", "descriptionRaw")]
+    if (
+        operation == "PAGAMENTO_FATURA" or category == "credit card payment"
+        or category == "same person transfer" or category.startswith("same person transfer - ")
+        or any(re.search(r"\b(?:pagamento|pagto\.?|pgto\.?) (?:d[ae] )?fatura\b", name) for name in descriptions)
+        or (card and direction == "CREDIT" and "pagamento recebido" in descriptions)
+    ):
+        return "transfer"
+    if card:
+        return "expense" if direction == "DEBIT" else "credit"
+    if (
+        same_owner_transfer(raw.get("paymentData"), direction, owner_document)
+        or any(re.search(
+            r"^(?:transferencia|pix|ted|doc)\b.*\b(?:contas proprias|mesma titularidade)\b", name,
+        ) for name in descriptions)
+    ):
+        return "transfer"
+    if direction == "CREDIT" and operation == "RENDIMENTO_APLIC_FINANCEIRA":
+        return "income"
+    if direction == "DEBIT" and category in ("taxes on investments", "tax on financial operations"):
+        return "expense"
+    investment_descriptions = [*descriptions, plain_text(raw.get("operationTypeAdditionalInfo"))]
+    if (
+        operation == "RESGATE_APLIC_FINANCEIRA"
+        or category in INVESTMENT_CATEGORIES
+        or any(INVESTMENT_MOVEMENT.search(name) for name in investment_descriptions)
+    ):
         return "transfer"
     if direction == "DEBIT":
         return "expense"
-    return "credit" if card or operation in ("ESTORNO", "CASHBACK") else "income"
+    return "credit" if operation in ("ESTORNO", "CASHBACK") else "income"
 
 
-def normalize_transaction(raw: dict[str, Any], account_id: str, as_of: str, card: bool) -> dict | None:
-    if raw.get("status") != "POSTED":
+def expense_payment_method(raw: dict[str, Any], card: bool) -> str | None:
+    if card:
+        return "credit_card"
+
+    payment = raw.get("paymentData")
+    payment_code = label(payment.get("paymentMethod")).upper() if isinstance(payment, dict) else ""
+    operation = label(raw.get("operationType")).upper()
+    method = PAYMENT_METHOD_CODES.get(payment_code) or PAYMENT_METHOD_CODES.get(operation)
+    if method:
+        return method
+
+    category_method = PAYMENT_METHOD_CATEGORIES.get(label(raw.get("category")).casefold())
+    descriptions = [plain_text(raw.get(field)) for field in (
+        "operationTypeAdditionalInfo", "descriptionRaw", "description",
+    )]
+    if operation == "CARTAO":
+        debit = PAYMENT_METHOD_DESCRIPTIONS["debit_card"]
+        if category_method == "debit_card" or any(debit.match(description) for description in descriptions):
+            return "debit_card"
+        return "card"
+
+    for description in descriptions:
+        for method, pattern in PAYMENT_METHOD_DESCRIPTIONS.items():
+            if pattern.match(description):
+                return method
+    return category_method
+
+
+def normalize_transaction(
+    raw: dict[str, Any], account_id: str, as_of: str, card: bool, owner_document: str | None = None,
+) -> dict | None:
+    status = raw.get("status")
+    if status != "POSTED" and not (card and status == "PENDING"):
         return None
     if raw.get("accountId", account_id) != account_id:
         raise pluggy.PluggyError("Pluggy returned a transaction for another account.")
@@ -115,15 +238,19 @@ def normalize_transaction(raw: dict[str, Any], account_id: str, as_of: str, card
     amount = cents(value)
     occurred_on = calendar_date(raw.get("date"))
     direction = raw.get("type")
+    if card and direction is None and amount:
+        # Some connectors omit the direction. Card debits increase the balance.
+        direction = "DEBIT" if amount > 0 else "CREDIT"
     if amount is None or not occurred_on or occurred_on > as_of or direction not in ("CREDIT", "DEBIT"):
         return None
 
-    name = label(raw.get("description")) or "Lançamento"
-    kind = transaction_kind(raw, name, card, direction)
+    kind = transaction_kind(raw, card, direction, owner_document)
+    if status == "PENDING" and kind != "expense":
+        return None
     entry = {
         "id": f"{account_id}.{identifier(raw.get('id'))}",
         "date": occurred_on,
-        "name": name,
+        "name": label(raw.get("description")) or "Lançamento",
         "amountCents": abs(amount),
         "cardId" if card else "accountId": account_id,
         "kind": kind,
@@ -134,6 +261,9 @@ def normalize_transaction(raw: dict[str, Any], account_id: str, as_of: str, card
         category = CATEGORIES.get(label(raw.get("category")).casefold())
         if category:
             entry["category"] = category
+        method = expense_payment_method(raw, card)
+        if method:
+            entry["paymentMethod"] = method
     return entry
 
 
@@ -188,8 +318,9 @@ def load_item(
         else:
             continue
 
+        owner_document = tax_document(raw.get("taxNumber")) if not card else None
         for transaction in pluggy.transactions(account_id, api_key):
-            entry = normalize_transaction(transaction, account_id, as_of, card)
+            entry = normalize_transaction(transaction, account_id, as_of, card, owner_document)
             if entry is not None:
                 entries.append(entry)
     return accounts, cards, entries

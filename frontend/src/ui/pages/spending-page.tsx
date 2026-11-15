@@ -57,7 +57,7 @@ function CategoryExpenses() {
         <SearchField value={search} onChange={setSearch} />
         <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
       </div>
-      {live && <p className="report-muted">Os gastos consideram lançamentos efetivados. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
+      {live && <p className="report-muted">Os gastos incluem compras da fatura aberta até a data da consulta. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
       <ReportMetrics items={[
         { label: "Gasto líquido", value: formatMoney(total) },
         { label: "Compras", value: String(rows.length) },
@@ -66,6 +66,7 @@ function CategoryExpenses() {
         label="Compras por categoria"
         rows={rows}
         getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id })}
+        showPaymentMethod
       />
     </SectionCard>
   );

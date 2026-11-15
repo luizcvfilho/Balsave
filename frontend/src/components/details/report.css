@@ -295,6 +295,11 @@
     grid-area: 2 / 1;
   }
 
+  .report-transaction-payment {
+    grid-area: 3 / 1 / 4 / -1;
+    color: var(--text-secondary);
+  }
+
   .report-table .report-transaction-date {
     grid-area: 2 / 2;
     text-align: end;

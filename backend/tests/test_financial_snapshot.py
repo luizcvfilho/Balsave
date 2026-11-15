@@ -35,6 +35,7 @@ class FinancialSnapshotTests(TestCase):
             "cardId": ACCOUNT,
             "kind": "expense",
             "category": "Alimentação",
+            "paymentMethod": "credit_card",
         })
 
     def test_bill_payments_are_transfers_on_both_sides(self):
@@ -46,11 +47,112 @@ class FinancialSnapshotTests(TestCase):
                 )
                 self.assertEqual(entry["kind"], "transfer")
                 self.assertEqual(entry["direction"], "in" if card else "out")
+                self.assertNotIn("paymentMethod", entry)
 
-    def test_pending_and_unconverted_entries_are_excluded(self):
+    def test_bank_expense_payment_methods_use_reported_fields_and_explicit_descriptions(self):
+        for fields, expected in (
+            ({"operationType": "OUTROS", "paymentData": {"paymentMethod": "PIX"}}, "pix"),
+            ({"operationType": "BOLETO", "description": "Pix enviado"}, "boleto"),
+            ({"operationType": "TED"}, "ted"),
+            ({"operationType": "DOC"}, "doc"),
+            ({"operationType": "TRANSFERENCIA_MESMA_INSTITUICAO"}, "bank_transfer"),
+            ({"operationType": "CARTAO"}, "card"),
+            ({"operationType": "CARTAO", "operationTypeAdditionalInfo": "Cartão de débito"}, "debit_card"),
+            ({"operationType": "CARTAO", "category": "Debt card"}, "debit_card"),
+            ({"descriptionRaw": "Pix - Enviado"}, "pix"),
+            ({"description": "Débito automático"}, "automatic_debit"),
+            ({"category": "Transfer - Check"}, "check"),
+            ({"paymentData": [], "operationType": "OUTROS", "description": "Cobrança de serviço"}, None),
+        ):
+            with self.subTest(expected=expected, fields=fields):
+                entry = normalize_transaction({**self.entry, **fields}, ACCOUNT, "2026-11-14", card=False)
+                self.assertEqual(entry["kind"], "expense")
+                self.assertEqual(entry.get("paymentMethod"), expected)
+
+    def test_pending_card_purchases_count_through_the_reporting_date(self):
+        pending = {**self.entry, "status": "PENDING"}
+        entry = normalize_transaction(pending, ACCOUNT, "2026-11-14", card=True)
+        self.assertEqual((entry["kind"], entry["category"], entry["amountCents"]), ("expense", "Alimentação", 1547))
+        self.assertIsNone(normalize_transaction(pending, ACCOUNT, "2026-11-14", card=False))
         self.assertIsNone(normalize_transaction(
-            {**self.entry, "status": "PENDING"}, ACCOUNT, "2026-11-14", True,
+            {**pending, "date": "2026-11-15T03:00:00Z"}, ACCOUNT, "2026-11-14", card=True,
         ))
+        self.assertIsNone(normalize_transaction(
+            {**pending, "type": "CREDIT"}, ACCOUNT, "2026-11-14", card=True,
+        ))
+
+    def test_card_direction_falls_back_to_the_signed_amount_if_absent(self):
+        purchase = {**self.entry, "type": None}
+        entry = normalize_transaction(purchase, ACCOUNT, "2026-11-14", card=True)
+        self.assertEqual(entry["kind"], "expense")
+        entry = normalize_transaction(
+            {**purchase, "amount": Decimal("-15.47"), "description": "Pagamento recebido"},
+            ACCOUNT, "2026-11-14", card=True,
+        )
+        self.assertEqual((entry["kind"], entry["direction"]), ("transfer", "in"))
+
+    def test_transfers_compare_full_documents_and_keep_third_party_debits(self):
+        payer = {"documentNumber": {"type": "CPF", "value": "123.450.789-00"}}
+        receiver = {"documentNumber": {"type": "CPF", "value": "12345078900"}}
+        for operation in ("PIX", "TED", "TRANSFERENCIA_MESMA_INSTITUICAO"):
+            with self.subTest(operation=operation):
+                transfer = {**self.entry, "operationType": operation, "category": None}
+                entry = normalize_transaction(
+                    {**transfer, "paymentData": {"payer": payer, "receiver": receiver}},
+                    ACCOUNT, "2026-11-14", card=False,
+                )
+                self.assertEqual((entry["kind"], entry["direction"]), ("transfer", "out"))
+                for document in ("980.450.789-00", "***.450.789-**"):
+                    entry = normalize_transaction(
+                        {**transfer, "paymentData": {
+                            "payer": payer, "receiver": {"documentNumber": {"type": "CPF", "value": document}},
+                        }},
+                        ACCOUNT, "2026-11-14", card=False,
+                    )
+                    self.assertEqual(entry["kind"], "expense")
+
+    def test_load_item_uses_the_account_owner_when_a_transfer_omits_its_local_participant(self):
+        record = {"id": ACCOUNT, "type": "BANK", "currencyCode": "BRL", "taxNumber": "123.450.789-00"}
+        receiver = {"documentNumber": {"type": "CPF", "value": "12345078900"}}
+        transaction = {**self.entry, "operationType": "PIX", "paymentData": {"receiver": receiver}}
+        with (
+            patch.object(pluggy, "meu_pluggy_item"),
+            patch.object(pluggy, "accounts", return_value=[record]),
+            patch.object(pluggy, "transactions", return_value=[transaction]),
+        ):
+            accounts, _, entries = load_item(UUID(ACCOUNT), "test", "2026-11-14", "Connection 1", {})
+        self.assertEqual((entries[0]["kind"], entries[0]["direction"]), ("transfer", "out"))
+        self.assertNotIn("taxNumber", accounts[0])
+        self.assertNotIn("paymentData", entries[0])
+
+    def test_investments_and_explicit_same_owner_movements_are_transfers(self):
+        for fields in (
+            {"category": "Same person transfer - PIX"},
+            {"description": "TED entre contas próprias"},
+            {"category": "Mutual funds"},
+            {"description": "Aplicação em fundo"},
+            {"descriptionRaw": "APLIC. BB REND FÁCIL"},
+            {"type": "CREDIT", "description": "BB Rende Fácil"},
+            {"type": "CREDIT", "operationType": "RESGATE_APLIC_FINANCEIRA"},
+        ):
+            with self.subTest(fields=fields):
+                entry = normalize_transaction(
+                    {**self.entry, "category": None, **fields}, ACCOUNT, "2026-11-14", card=False,
+                )
+                self.assertEqual(entry["kind"], "transfer")
+                self.assertEqual(entry["direction"], "in" if fields.get("type") == "CREDIT" else "out")
+                self.assertNotIn("category", entry)
+
+    def test_investment_taxes_are_expenses_and_booked_yield_is_income(self):
+        tax = {**self.entry, "description": "BB Rende Fácil - IOF", "category": "Taxes on investments"}
+        yield_credit = {
+            **self.entry, "description": "BB Rende Fácil", "type": "CREDIT",
+            "operationType": "RENDIMENTO_APLIC_FINANCEIRA",
+        }
+        self.assertEqual(normalize_transaction(tax, ACCOUNT, "2026-11-14", False)["kind"], "expense")
+        self.assertEqual(normalize_transaction(yield_credit, ACCOUNT, "2026-11-14", False)["kind"], "income")
+
+    def test_card_purchases_require_a_brl_amount(self):
         foreign = {**self.entry, "currencyCode": "USD"}
         self.assertIsNone(normalize_transaction(foreign, ACCOUNT, "2026-11-14", True))
         converted = normalize_transaction(

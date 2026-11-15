@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/a11y/noRedundantRoles: Retain native table semantics in Safari when the mobile layout stacks the cells. */
 import Link from "next/link";
 import { useFinancialReports } from "../../data/financial-reports";
-import { isIncoming, type Transaction, transactionCategory } from "../../lib/finance";
+import { isIncoming, paymentMethodLabels, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
 
 export const amountColors = {
@@ -33,10 +33,11 @@ export function orderedTransactions(rows: TransactionRow[], order = "recent") {
   });
 }
 
-export function TransactionTable({ label, rows, getHref, empty = "Nenhum lançamento para os filtros selecionados." }: {
+export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, empty = "Nenhum lançamento para os filtros selecionados." }: {
   label: string;
   rows: TransactionRow[];
   getHref: (id: string) => string;
+  showPaymentMethod?: boolean;
   empty?: string;
 }) {
   const { transactionSource } = useFinancialReports();
@@ -48,6 +49,7 @@ export function TransactionTable({ label, rows, getHref, empty = "Nenhum lançam
         <tr role="row">
           <th role="columnheader" scope="col">Descrição</th>
           <th role="columnheader" scope="col">Categoria</th>
+          {showPaymentMethod && <th role="columnheader" scope="col">Forma de pagamento</th>}
           <th role="columnheader" scope="col">Data</th>
           <th role="columnheader" scope="col">{rows.some(row => row.netCents !== undefined) ? "Gasto líquido" : "Valor"}</th>
         </tr>
@@ -55,6 +57,7 @@ export function TransactionTable({ label, rows, getHref, empty = "Nenhum lançam
       <tbody role="rowgroup">
         {rows.map(({ transaction, netCents, receivedCents, annotation }) => {
           const source = transactionSource(transaction);
+          const paymentMethod = transaction.paymentMethod ?? (transaction.cardId ? "credit_card" : undefined);
           return (
             <tr role="row" key={transaction.id}>
               <td role="cell" className="report-transaction-name">
@@ -65,6 +68,11 @@ export function TransactionTable({ label, rows, getHref, empty = "Nenhum lançam
                 {annotation && <span className="report-cell-detail">{annotation}</span>}
               </td>
               <td role="cell" className="report-transaction-category">{transactionCategory(transaction)}</td>
+              {showPaymentMethod && (
+                <td role="cell" className="report-transaction-payment">
+                  {(paymentMethod && paymentMethodLabels[paymentMethod]) || "Não identificada"}
+                </td>
+              )}
               <td role="cell" className="report-transaction-date">
                 <time dateTime={transaction.date}>{formatNumericDate(transaction.date)}</time>
               </td>
