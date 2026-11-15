@@ -1,70 +1,48 @@
+"use client";
+
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Container from "@mui/material/Container";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { BreakdownList } from "../../components/cards/breakdown-list";
+import Link from "next/link";
+import { useState } from "react";
 import { MetricCard } from "../../components/cards/metric-card";
 import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
 import { RecentTransactions } from "../../components/dashboard/recent-transactions";
 import { SpendingCategories } from "../../components/dashboard/spending-categories";
+import { useReportQuery } from "../../components/details/report-query";
+import { mockAccounts, mockAsOf, mockCards, mockSpendingMonths } from "../../data/mock-data";
 import {
-  categoryBreakdown,
-  spendingByMonth,
-  spendingPace,
-  summarizeBalances,
-  summarizeCards,
-} from "../../lib/finance";
-import {
-  formatDate,
-  formatMonth,
-  formatMonthName,
-  formatMoney,
-  formatPercent,
-  formatShortDate,
-  formatShortMonth,
-} from "../../lib/format";
-import {
-  mockAccounts,
-  mockAsOf,
-  mockBalanceHistory,
-  mockCards,
-  mockSpendingMonths,
-  mockTransactions,
-} from "../../data/mock-data";
+  balanceChartPoint, balanceHistory, currentMonth, paceChartPoints, reportedTransactions, spending,
+} from "../../data/mock-reports";
+import { categoryBreakdown, summarizeBalances, summarizeCards } from "../../lib/finance";
+import { formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
+import { optionValue, reportHref } from "../../lib/report-links";
 
-const currentMonth = mockAsOf.slice(0, 7);
 const currentDay = Number(mockAsOf.slice(8));
 const balances = summarizeBalances(mockAccounts);
 const cards = summarizeCards(mockCards);
-const spending = spendingByMonth(mockTransactions, mockAsOf);
 const categoryPeriods = mockSpendingMonths.map(month => categoryBreakdown(spending, month));
-const pacePoints = spendingPace(spending, mockAsOf).map(({ day, currentCents, averageCents }) => ({
-  axisLabel: String(day).padStart(2, "0"),
-  label: `Dia ${day} de ${formatMonthName(currentMonth)}`,
-  values: [currentCents, averageCents],
-}));
-const balancePoints = [
-  ...mockBalanceHistory.map(({ month, cents }) => ({
-    axisLabel: formatShortMonth(month),
-    label: formatMonth(month),
-    values: [cents],
-  })),
-  {
-    axisLabel: formatShortMonth(currentMonth),
-    label: `${formatMonth(currentMonth)} · até dia ${currentDay}`,
-    values: [balances.totalCents],
-  },
-];
-const recentTransactions = mockTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
-const hotelExpense = mockTransactions.find(transaction => transaction.id === "hotel");
-const hotelRefund = mockTransactions.find(transaction => transaction.id === "hotel-refund");
+const pacePoints = paceChartPoints(currentMonth);
+const history = balanceHistory().slice(1);
+const balancePoints = history.map(balanceChartPoint);
+const recentTransactions = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
 
 const twoColumns = "repeat(2, minmax(0, 1fr))";
 
 export function DashboardPage() {
+  const { params, update } = useReportQuery();
+  const month = optionValue(params.get("mes"), mockSpendingMonths, currentMonth);
+  const [paceIndex, setPaceIndex] = useState(currentDay - 1);
+  const [balanceIndex, setBalanceIndex] = useState(history.length - 1);
+
+  function details(path: string, values: Record<string, string | undefined> = {}) {
+    return reportHref(path, { painelMes: month === currentMonth ? undefined : month, ...values });
+  }
+
   const cardUsage = cards.limitCents > 0 ? cards.usedCents / cards.limitCents : 0;
 
   return (
@@ -91,17 +69,19 @@ export function DashboardPage() {
         <MetricCard
           id="contas"
           title="Saldo em contas"
+          href={details("/contas")}
           value={formatMoney(balances.totalCents)}
           highlighted
           rows={balances.banks.map(({ bank, balanceCents }) => ({
             key: bank,
-            label: bank,
+            label: <Link className="report-link report-action" href={details("/contas", { banco: bank })}>{bank}</Link>,
             value: formatMoney(balanceCents),
           }))}
         />
         <MetricCard
           id="cartoes"
           title="Limite usado nos cartões"
+          href={details("/cartoes")}
           value={formatMoney(cards.usedCents)}
           detail={`de ${formatMoney(cards.limitCents)}`}
           indicator={
@@ -117,9 +97,13 @@ export function DashboardPage() {
               </Typography>
             </Stack>
           }
-          rows={mockCards.map(({ bank, lastFour, usedCents, limitCents }) => ({
+          rows={mockCards.map(({ id, bank, lastFour, usedCents, limitCents }) => ({
             key: `${bank}-${lastFour}`,
-            label: <>{bank} <span aria-hidden="true">·</span> <span className="sr-only">final </span>{lastFour}</>,
+            label: (
+              <Link className="report-link report-action" href={details("/cartoes", { cartao: id })}>
+                <span>{bank} <span aria-hidden="true">·</span> <span className="sr-only">final </span>{lastFour}</span>
+              </Link>
+            ),
             value: (
               <>
                 {formatMoney(usedCents)}{" "}
@@ -136,6 +120,7 @@ export function DashboardPage() {
         <SectionCard
           id="ritmo"
           title="Ritmo de gastos"
+          href={details("/gastos", { aba: "ritmo", dia: String(paceIndex + 1) })}
           description="Gasto líquido acumulado por dia do mês"
         >
           <LineChart
@@ -146,17 +131,25 @@ export function DashboardPage() {
             ]}
             axisIndices={[0, 6, 13, 20, pacePoints.length - 1]}
             initialIndex={currentDay - 1}
+            onSelect={setPaceIndex}
             axisLabel="Dia do mês no gráfico de ritmo de gastos"
             zeroBased
             compareToReference
           />
         </SectionCard>
-        <SpendingCategories periods={categoryPeriods} asOf={mockAsOf} />
+        <SpendingCategories
+          periods={categoryPeriods}
+          asOf={mockAsOf}
+          month={month}
+          onMonthChange={value => update({ mes: value === currentMonth ? undefined : value })}
+          getHref={category => details("/gastos", { mes: month, categoria: category })}
+        />
       </Box>
 
       <SectionCard
         id="evolucao"
         title="Evolução do saldo em contas"
+        href={details("/contas", { aba: "evolucao", ponto: history[balanceIndex].month })}
         description="Saldo no fechamento de cada mês e saldo atual do mês em andamento"
       >
         <LineChart
@@ -164,23 +157,16 @@ export function DashboardPage() {
           series={[{ label: "Saldo consolidado", style: "actual" }]}
           axisIndices={balancePoints.map((_, index) => index)}
           initialIndex={balancePoints.length - 1}
+          onSelect={setBalanceIndex}
           axisLabel="Mês no gráfico de evolução do saldo"
           partialLastPoint
         />
       </SectionCard>
 
-      <Box sx={{ display: "grid", gap: "inherit", alignItems: "start", gridTemplateColumns: { sm: twoColumns } }}>
-        <RecentTransactions transactions={recentTransactions} />
-        {hotelExpense && hotelRefund && (
-          <SectionCard id="reembolsos" title="Reembolsos" description={hotelExpense.name}>
-            <BreakdownList rows={[
-              { key: "original", label: "Valor original", value: formatMoney(hotelExpense.amountCents) },
-              { key: "received", label: `Recebido em ${formatShortDate(hotelRefund.date)}`, value: formatMoney(hotelRefund.amountCents) },
-              { key: "pending", label: "Saldo pendente", value: formatMoney(hotelExpense.amountCents - hotelRefund.amountCents) },
-            ]} />
-          </SectionCard>
-        )}
-      </Box>
+      <RecentTransactions
+        transactions={recentTransactions}
+        getHref={id => details("/lancamentos", { lancamento: id })}
+      />
     </Container>
   );
 }

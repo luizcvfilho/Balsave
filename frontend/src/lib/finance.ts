@@ -15,11 +15,29 @@ export type Transaction = {
   date: string;
   name: string;
   amountCents: number;
+  accountId?: string;
+  cardId?: string;
 } & (
-  | { kind: "expense"; merchantType?: string }
+  | { kind: "expense"; merchantType?: string; expectsRefund?: boolean }
   | { kind: "refund"; expenseId: string }
-  | { kind: "income" | "transfer" }
+  | { kind: "income" }
+  | { kind: "transfer"; direction?: "in" | "out" }
 );
+
+export type Expense = Extract<Transaction, { kind: "expense" }>;
+type Refund = Extract<Transaction, { kind: "refund" }>;
+
+export const transactionKindLabels = {
+  expense: "Despesa",
+  income: "Receita",
+  refund: "Reembolso",
+  transfer: "Transferência",
+} satisfies Record<Transaction["kind"], string>;
+
+export function isIncoming(transaction: Transaction) {
+  return transaction.kind === "income" || transaction.kind === "refund"
+    || (transaction.kind === "transfer" && transaction.direction === "in");
+}
 
 const categoriesByMerchantType: ReadonlyMap<string, string> = new Map([
   ["rent", "Moradia"],
@@ -82,25 +100,34 @@ export function previousMonths(month: string, count: number) {
   );
 }
 
-export function spendingByMonth(transactions: readonly Transaction[], asOf: string) {
-  const refundsByExpense = new Map<string, number>();
+export function expensesWithRefunds(transactions: readonly Transaction[], asOf: string) {
+  const refundsByExpense = new Map<string, Refund[]>();
   for (const transaction of transactions) {
     if (transaction.kind === "refund" && transaction.date <= asOf) {
-      const receivedCents = refundsByExpense.get(transaction.expenseId) ?? 0;
-      refundsByExpense.set(transaction.expenseId, receivedCents + transaction.amountCents);
+      const refunds = refundsByExpense.get(transaction.expenseId) ?? [];
+      refunds.push(transaction);
+      refundsByExpense.set(transaction.expenseId, refunds);
     }
   }
 
-  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number> }>();
-  for (const transaction of transactions) {
-    if (transaction.kind !== "expense" || transaction.date > asOf) continue;
+  return transactions
+    .filter((transaction): transaction is Expense => transaction.kind === "expense" && transaction.date <= asOf)
+    .map(expense => {
+      const refunds = refundsByExpense.get(expense.id) ?? [];
+      const receivedCents = refunds.reduce((sum, refund) => sum + refund.amountCents, 0);
+      const netCents = Math.max(0, expense.amountCents - receivedCents);
+      const status = netCents === 0 ? "completed" : receivedCents > 0 ? "partial" : "pending";
+      return { expense, refunds, receivedCents, netCents, status } as const;
+    });
+}
 
-    const month = transaction.date.slice(0, 7);
-    const day = Number(transaction.date.slice(8));
-    const refundedCents = refundsByExpense.get(transaction.id) ?? 0;
-    const netCents = Math.max(0, transaction.amountCents - refundedCents);
+export function spendingByMonth(transactions: readonly Transaction[], asOf: string) {
+  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number> }>();
+  for (const { expense, netCents } of expensesWithRefunds(transactions, asOf)) {
     if (netCents === 0) continue;
 
+    const month = expense.date.slice(0, 7);
+    const day = Number(expense.date.slice(8));
     let period = months.get(month);
     if (!period) {
       period = { dailyCents: Array<number>(daysInMonth(month)).fill(0), categoryCents: new Map() };
@@ -108,7 +135,7 @@ export function spendingByMonth(transactions: readonly Transaction[], asOf: stri
     }
 
     period.dailyCents[day - 1] += netCents;
-    const category = transactionCategory(transaction);
+    const category = transactionCategory(expense);
     period.categoryCents.set(category, (period.categoryCents.get(category) ?? 0) + netCents);
   }
 

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   categoryBreakdown,
+  expensesWithRefunds,
   spendingByMonth,
   spendingPace,
   summarizeBalances,
@@ -20,6 +21,19 @@ test("consolidates accounts by bank and totals card usage and limits separately"
     { bank: "A", lastFour: "1234", usedCents: 250001, limitCents: 300000 },
     { bank: "A", lastFour: "5678", usedCents: 230002, limitCents: 900000 },
   ])).toEqual({ usedCents: 480003, limitCents: 1200000 });
+});
+
+test("shares the net spend with refund tracking and counts only credits received as of the report date", () => {
+  const transactions = [
+    { id: "stay", name: "Stay", kind: "expense", expectsRefund: true, date: "2026-10-10", amountCents: 10001 },
+    { id: "first", name: "Refund", kind: "refund", date: "2026-10-14", expenseId: "stay", amountCents: 3000 },
+    { id: "second", name: "Refund", kind: "refund", date: "2026-11-08", expenseId: "stay", amountCents: 4501 },
+    { id: "last", name: "Refund", kind: "refund", date: "2026-11-20", expenseId: "stay", amountCents: 2600 },
+  ] as const;
+  expect(expensesWithRefunds(transactions, "2026-10-13")[0]).toMatchObject({ status: "pending", receivedCents: 0, netCents: 10001 });
+  expect(expensesWithRefunds(transactions, "2026-11-14")[0]).toMatchObject({ status: "partial", receivedCents: 7501, netCents: 2500 });
+  expect(expensesWithRefunds(transactions, "2026-11-20")[0]).toMatchObject({ status: "completed", receivedCents: 10101, netCents: 0 });
+  expect(categoryBreakdown(spendingByMonth(transactions, "2026-11-14"), "2026-10").totalCents).toBe(2500);
 });
 
 test("ranks classified net expenses and excludes transfers, future entries, and refund credits", () => {

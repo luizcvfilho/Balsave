@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 test("shows shared navigation and updates spending charts independently", async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", error => pageErrors.push(error));
   await page.goto("/");
   const header = page.getByRole("banner");
   await expect(header.getByRole("link", { name: "Balsave, início" })).toHaveAttribute("href", "/");
   await expect(header.getByRole("link")).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Lançamentos recentes" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toHaveCount(0);
 
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
   const pace = page.getByRole("slider", { name: "Dia do mês no gráfico de ritmo de gastos" });
@@ -17,6 +19,7 @@ test("shows shared navigation and updates spending charts independently", async 
   await expect(pace).toHaveAttribute("aria-valuetext", /Dia 14 de novembro/);
   await pace.press("ArrowRight");
   await expect(pace).toHaveAttribute("aria-valuetext", /Dia 15 de novembro.*ainda sem dados/);
+  expect(pageErrors).toEqual([]);
 });
 
 test("keeps category colors stable and communicates spending and transaction direction", async ({ page }) => {

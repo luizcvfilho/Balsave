@@ -1,3 +1,4 @@
 @layer theme, base, mui, components, utilities;
 @import "tailwindcss";
 @import "../../../assets/balsave-theme.css" layer(base);
+@import "../components/details/report.css" layer(components);

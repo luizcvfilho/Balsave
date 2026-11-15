@@ -4,24 +4,48 @@ import type { AccountBalance, CreditCard, Transaction } from "../lib/finance";
 export const mockAsOf = "2026-11-14";
 
 export const mockAccounts = [
-  { bank: "Itaú", balanceCents: 742015 },
-  { bank: "Itaú", balanceCents: 200000 },
-  { bank: "Nubank", balanceCents: 612250 },
-  { bank: "Inter", balanceCents: 320000 },
-] satisfies AccountBalance[];
+  { id: "itau-corrente", bank: "Itaú", name: "Conta corrente", balanceCents: 742015 },
+  { id: "itau-poupanca", bank: "Itaú", name: "Poupança", balanceCents: 200000 },
+  { id: "nubank-conta", bank: "Nubank", name: "Conta digital", balanceCents: 612250 },
+  { id: "inter-conta", bank: "Inter", name: "Conta digital", balanceCents: 320000 },
+] satisfies (AccountBalance & { id: string; name: string })[];
+
+type Installment = { name: string; month: string; number: number; count: number; amountCents: number };
+type MockCard = CreditCard & {
+  id: string;
+  openInvoice: { dueDate: string; transactionIds: string[] };
+  installments: Installment[];
+};
 
 export const mockCards = [
-  { bank: "Itaú", lastFour: "4821", usedCents: 248000, limitCents: 900000 },
-  { bank: "Nubank", lastFour: "7032", usedCents: 124840, limitCents: 600000 },
-] satisfies CreditCard[];
+  {
+    id: "itau-4821", bank: "Itaú", lastFour: "4821", usedCents: 248000, limitCents: 900000,
+    openInvoice: { dueDate: "2026-11-26", transactionIds: ["hotel"] },
+    installments: ["2026-12", "2027-01", "2027-02", "2027-03"].map((month, index) => ({
+      name: "Notebook", month, number: index + 3, count: 6, amountCents: 42000,
+    })),
+  },
+  {
+    id: "nubank-7032", bank: "Nubank", lastFour: "7032", usedCents: 124840, limitCents: 600000,
+    openInvoice: { dueDate: "2026-11-24", transactionIds: ["restaurant", "cinema"] },
+    installments: ["2026-12", "2027-01", "2027-02"].map((month, index) => ({
+      name: "Cadeira ergonômica", month, number: index + 4, count: 6, amountCents: 35020,
+    })),
+  },
+] satisfies MockCard[];
 
-export const mockBalanceHistory = [
-  { month: "2026-06", cents: 1215000 },
-  { month: "2026-07", cents: 1380000 },
-  { month: "2026-08", cents: 1315000 },
-  { month: "2026-09", cents: 1560000 },
-  { month: "2026-10", cents: 1690000 },
-];
+export const mockBalanceSnapshots = [
+  { month: "2026-05", balances: [438000, 164000, 330000, 250000] },
+  { month: "2026-06", balances: [450000, 165000, 350000, 250000] },
+  { month: "2026-07", balances: [510000, 170000, 435000, 265000] },
+  { month: "2026-08", balances: [420000, 180000, 440000, 275000] },
+  { month: "2026-09", balances: [590000, 185000, 490000, 295000] },
+  { month: "2026-10", balances: [620000, 190000, 570000, 310000] },
+  { month: mockAsOf.slice(0, 7), balances: mockAccounts.map(account => account.balanceCents) },
+].map(({ month, balances }) => ({
+  month,
+  accounts: mockAccounts.map((account, index) => ({ ...account, balanceCents: balances[index] })),
+}));
 
 type MockPurchase = [day: number, name: string, merchantType: string, cents: number];
 
@@ -86,22 +110,26 @@ const historicalPurchases = Object.entries(purchasesByMonth).flatMap(([month, pu
     name,
     merchantType,
     amountCents,
+    accountId: merchantType === "rent" ? "itau-corrente" : "nubank-conta",
+    expectsRefund: month === "2026-07" && merchantType === "hotel",
   })),
 );
 
 export const mockTransactions: Transaction[] = [
   ...historicalPurchases,
-  { id: "market", date: "2026-11-02", kind: "expense", name: "Supermercado", merchantType: "groceries", amountCents: 18420 },
-  { id: "salary", date: "2026-11-05", kind: "income", name: "Salário", amountCents: 685000 },
-  { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000 },
-  { id: "restaurant", date: "2026-11-07", kind: "expense", name: "Restaurante", merchantType: "restaurant", amountCents: 12580 },
-  { id: "cinema", date: "2026-11-08", kind: "expense", name: "Cinema", merchantType: "cinema", amountCents: 7200 },
-  { id: "hotel", date: "2026-11-09", kind: "expense", name: "Hotel", merchantType: "hotel", amountCents: 80000 },
-  { id: "fuel", date: "2026-11-10", kind: "expense", name: "Posto", merchantType: "fuel", amountCents: 23000 },
-  { id: "hotel-refund", date: "2026-11-11", kind: "refund", name: "Reembolso do hotel", expenseId: "hotel", amountCents: 50000 },
-  { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850 },
-  { id: "card-payment", date: "2026-11-13", kind: "transfer", name: "Pagamento de fatura", amountCents: 160000 },
-  { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500 },
+  { id: "booking", date: "2026-09-20", kind: "expense", name: "Reserva cancelada", merchantType: "hotel", amountCents: 45900, accountId: "inter-conta" },
+  { id: "booking-refund", date: "2026-09-23", kind: "refund", name: "Reembolso da reserva", expenseId: "booking", amountCents: 45900, accountId: "inter-conta" },
+  { id: "market", date: "2026-11-02", kind: "expense", name: "Supermercado", merchantType: "groceries", amountCents: 18420, accountId: "nubank-conta" },
+  { id: "salary", date: "2026-11-05", kind: "income", name: "Salário", amountCents: 685000, accountId: "itau-corrente" },
+  { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000, accountId: "itau-corrente" },
+  { id: "restaurant", date: "2026-11-07", kind: "expense", name: "Restaurante", merchantType: "restaurant", amountCents: 12580, cardId: "nubank-7032" },
+  { id: "cinema", date: "2026-11-08", kind: "expense", name: "Cinema", merchantType: "cinema", amountCents: 7200, cardId: "nubank-7032" },
+  { id: "hotel", date: "2026-11-09", kind: "expense", name: "Hotel", merchantType: "hotel", amountCents: 80000, cardId: "itau-4821" },
+  { id: "fuel", date: "2026-11-10", kind: "expense", name: "Posto", merchantType: "fuel", amountCents: 23000, accountId: "inter-conta" },
+  { id: "hotel-refund", date: "2026-11-11", kind: "refund", name: "Reembolso do hotel", expenseId: "hotel", amountCents: 50000, accountId: "itau-corrente" },
+  { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850, accountId: "nubank-conta" },
+  { id: "card-payment", date: "2026-11-13", kind: "transfer", name: "Pagamento de fatura", amountCents: 160000, accountId: "itau-corrente" },
+  { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500, accountId: "nubank-conta" },
 ];
 
 export const mockSpendingMonths = [mockAsOf.slice(0, 7), ...Object.keys(purchasesByMonth).reverse()];

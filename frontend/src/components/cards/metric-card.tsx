@@ -13,11 +13,12 @@ type Props = {
   indicator?: ReactNode;
   rows: BreakdownRow[];
   highlighted?: boolean;
+  href?: string;
 };
 
-export function MetricCard({ id, title, value, detail, indicator, rows, highlighted }: Props) {
+export function MetricCard({ id, title, value, detail, indicator, rows, highlighted, href }: Props) {
   return (
-    <SectionCard id={id} title={title} highlighted={highlighted}>
+    <SectionCard id={id} title={title} highlighted={highlighted} href={href} linkSurface>
       <Stack direction="row" useFlexGap spacing={0.75} sx={{ alignItems: "baseline", flexWrap: "wrap" }}>
         <Typography
           color="primary.main"

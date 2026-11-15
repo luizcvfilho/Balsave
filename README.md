@@ -42,6 +42,10 @@ The dashboard uses a reproducible snapshot in [`frontend/src/data/mock-data.ts`]
 
 “Ritmo de gastos” and “Gastos por categoria” share the same net expense calculation. Expenses are categorized from their merchant type, and linked refunds reduce the original expense as of the reporting date. The daily comparison uses the previous three calendar months. For shorter months, it carries their closing total forward to the remaining days. The balance chart uses month-end snapshots and the latest balance for the open month.
 
+Use “Ver detalhes” to open the spending, account, card, or transaction report. Detail links carry the selected period, category, institution, card, or chart point in the URL. Spending reports share the dashboard's refund calculation, and account history uses the same balance snapshots for consolidated and institution-level views. The card fixtures specify invoice membership and due dates separately from purchase dates.
+
+In “Lançamentos” → “Reembolsos”, users can track pending, partial, and completed reimbursements and open the original purchase or individual receipts. Income and refund details support free-text classifications and tags. These annotations are stored in the current browser for the mock dataset and can be found through “Buscar lançamentos”.
+
 ## Database migrations
 
 `make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting the API. The `migrate` service uses the `postgres` role to make schema changes. The API uses the `balsave_app` role, which has permissions to access application data.

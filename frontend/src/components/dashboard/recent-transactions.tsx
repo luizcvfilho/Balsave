@@ -2,23 +2,21 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
-import { type Transaction, transactionCategory } from "../../lib/finance";
+import Link from "next/link";
+import { isIncoming, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatShortDate, formatSignedMoney } from "../../lib/format";
 import { SectionCard } from "../cards/section-card";
+import { amountColors } from "../details/transaction-table";
 
-const amountColors = {
-  expense: "var(--negative)",
-  income: "var(--positive)",
-  refund: "var(--positive)",
-  transfer: "var(--text-secondary)",
-} satisfies Record<Transaction["kind"], string>;
-
-export function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
+export function RecentTransactions({ transactions, getHref }: {
+  transactions: Transaction[];
+  getHref: (id?: string) => string;
+}) {
   return (
-    <SectionCard id="lancamentos" title="Lançamentos recentes">
+    <SectionCard id="lancamentos" title="Lançamentos recentes" href={getHref()}>
       <List disablePadding role="list">
         {transactions.map((transaction, index) => {
-          const incoming = transaction.kind === "income" || transaction.kind === "refund";
+          const incoming = isIncoming(transaction);
           return (
             <ListItem
               key={transaction.id}
@@ -27,8 +25,8 @@ export function RecentTransactions({ transactions }: { transactions: Transaction
               sx={{ flexWrap: "wrap", alignItems: "baseline", columnGap: 1.5, borderColor: "var(--border)" }}
             >
               <ListItemText
-                sx={{ minWidth: "max-content", my: 0 }}
-                primary={transaction.name}
+                sx={{ minWidth: 0, my: 0 }}
+                primary={<Link className="report-link report-action" href={getHref(transaction.id)}>{transaction.name}</Link>}
                 secondary={`${transactionCategory(transaction)} · ${formatShortDate(transaction.date)}`}
                 slotProps={{
                   primary: { variant: "body2", sx: { fontWeight: 500 } },

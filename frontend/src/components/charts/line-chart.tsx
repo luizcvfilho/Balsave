@@ -18,6 +18,8 @@ type Props = {
   series: Series[];
   axisIndices: number[];
   initialIndex: number;
+  selectedIndex?: number;
+  onSelect?: (index: number) => void;
   axisLabel: string;
   zeroBased?: boolean;
   partialLastPoint?: boolean;
@@ -82,10 +84,11 @@ function chartScale(values: number[], zeroBased: boolean) {
 }
 
 export function LineChart({
-  points, series, axisIndices, initialIndex, axisLabel,
+  points, series, axisIndices, initialIndex, selectedIndex: controlledIndex, axisLabel, onSelect,
   zeroBased = false, partialLastPoint = false, compareToReference = false,
 }: Props) {
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const [localIndex, setSelectedIndex] = useState(initialIndex);
+  const selectedIndex = controlledIndex ?? localIndex;
   const selected = points[selectedIndex];
   const lastIndex = points.length - 1;
   const values = points.flatMap(point => point.values.filter(value => value !== null));
@@ -107,10 +110,15 @@ export function LineChart({
   const selectedState = selectedComparison ? ` chart-${comparisonState(selectedComparison.difference)}` : "";
   const selectedLabel = selectedComparison && comparisonLabel(selectedComparison.difference);
 
+  function selectIndex(index: number) {
+    if (controlledIndex === undefined) setSelectedIndex(index);
+    onSelect?.(index);
+  }
+
   function selectPoint(event: PointerEvent<HTMLDivElement>) {
     const { left, width } = event.currentTarget.getBoundingClientRect();
     const relativeX = Math.min(1, Math.max(0, (event.clientX - left) / width));
-    setSelectedIndex(Math.round(relativeX * lastIndex));
+    selectIndex(Math.round(relativeX * lastIndex));
   }
 
   function pointSummary(index: number) {
@@ -217,7 +225,7 @@ export function LineChart({
           value={selectedIndex}
           aria-label={axisLabel}
           getAriaValueText={pointSummary}
-          onChange={(_, value) => setSelectedIndex(value)}
+          onChange={(_, value) => selectIndex(value)}
           sx={{ gridColumn: 2, alignSelf: "center", minHeight: 44, boxSizing: "border-box" }}
         />
       </div>

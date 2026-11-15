@@ -4,7 +4,8 @@ import Box from "@mui/material/Box";
 import LinearProgress from "@mui/material/LinearProgress";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { useState } from "react";
+import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import type { categoryBreakdown } from "../../lib/finance";
 import { formatMonth, formatMoney, formatPercent } from "../../lib/format";
 import { SectionCard } from "../cards/section-card";
@@ -12,6 +13,9 @@ import { SectionCard } from "../cards/section-card";
 type Props = {
   periods: ReturnType<typeof categoryBreakdown>[];
   asOf: string;
+  month: string;
+  onMonthChange: (month: string) => void;
+  getHref: (category?: string) => string;
 };
 
 const categoryColors: ReadonlyMap<string, string> = new Map([
@@ -23,9 +27,13 @@ const categoryColors: ReadonlyMap<string, string> = new Map([
   ["Viagem", "var(--category-travel)"],
 ]);
 
-export function SpendingCategories({ periods, asOf }: Props) {
+const subscribe = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
+export function SpendingCategories({ periods, asOf, month, onMonthChange, getHref }: Props) {
+  const ready = useSyncExternalStore(subscribe, clientReady, serverReady);
   const currentMonth = asOf.slice(0, 7);
-  const [month, setMonth] = useState(currentMonth);
   const period = periods.find(entry => entry.month === month);
   const asOfDay = Number(asOf.slice(8));
 
@@ -33,12 +41,14 @@ export function SpendingCategories({ periods, asOf }: Props) {
     <SectionCard
       id="categorias"
       title="Gastos por categoria"
+      href={getHref()}
       action={
         <TextField
           select
           size="small"
+          disabled={!ready}
           value={month}
-          onChange={event => setMonth(event.target.value)}
+          onChange={event => onMonthChange(event.target.value)}
           slotProps={{ select: { native: true, inputProps: { "aria-label": "Mês dos gastos por categoria" } } }}
           sx={{
             maxWidth: "100%",
@@ -66,8 +76,8 @@ export function SpendingCategories({ periods, asOf }: Props) {
               const share = cents / period.totalCents;
               return (
                 <li key={name}>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", gap: "2px 10px" }}>
-                    <Typography variant="body2">{name}</Typography>
+                  <Box component={Link} href={getHref(name)} className="report-link report-choice" sx={{ py: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{name}</Typography>
                     <Typography variant="body2" sx={{ marginInlineStart: "auto", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                       {formatMoney(cents)}{" "}
                       <Typography component="span" variant="caption" color="var(--text-secondary)" sx={{ display: "inline-block", minWidth: "3.375rem", textAlign: "end" }}>
