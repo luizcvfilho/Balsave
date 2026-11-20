@@ -133,10 +133,6 @@
   stroke-dasharray: 5 4;
 }
 
-.chart-line.chart-partial {
-  stroke-dasharray: 5 4;
-}
-
 .chart-dot {
   position: absolute;
   width: 0.6875rem;

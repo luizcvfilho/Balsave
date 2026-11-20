@@ -95,20 +95,25 @@ test("shows upcoming installment estimates without adding them to recorded spend
 
 test("shows an institution's accounts, date-filtered statement, and balance evolution", async ({ page }) => {
   await page.goto("/");
+  const evolution = page.getByRole("region", { name: "Evolução do saldo em contas" });
+  await expect(evolution.getByRole("slider")).toHaveAttribute("aria-valuetext", /^Fechamento em 31 de outubro de 2026/);
   await page.getByRole("region", { name: "Saldo em contas", exact: true }).getByRole("link", { name: "Itaú" }).click();
   await expect(page.getByLabel("Instituição")).toHaveValue("Itaú");
   await page.getByRole("link", { name: "Ver extrato de Itaú · Conta corrente" }).click();
   const statement = page.getByRole("table", { name: "Extrato da conta" });
   await expect(statement.getByRole("link", { name: "Pagamento de fatura" })).toBeVisible();
+  await expect(statement.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
   await page.getByLabel("Movimentação").selectOption("in");
   await expect(statement.getByRole("link", { name: "Salário" })).toBeVisible();
   await expect(statement.getByRole("link", { name: "Reembolso do hotel" })).toBeVisible();
   await expect(statement.getByRole("link", { name: "Pagamento de fatura" })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Evolução", exact: true }).click();
+  const history = page.getByRole("region", { name: "Histórico de saldos" });
+  await expect(history.getByRole("slider")).toHaveAttribute("aria-valuetext", /^Fechamento em 31 de outubro de 2026/);
+  await expect(page.getByLabel("Mês final").locator('option[value="2026-11"]')).toHaveCount(0);
   await page.getByLabel("Mês inicial").selectOption("2026-10");
   await page.getByLabel("Mês final").selectOption("2026-10");
-  const history = page.getByRole("region", { name: "Histórico de saldos" });
   await expect(history.getByText(/R\$\s*7\.750,00/)).toBeVisible();
   await expect(history.getByText(/R\$\s*8\.100,00/)).toBeVisible();
   await expect(history.getByText(/\+R\$\s*350,00/)).toBeVisible();

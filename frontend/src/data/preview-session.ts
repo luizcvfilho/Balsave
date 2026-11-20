@@ -34,7 +34,7 @@ export async function hasPreviewSession() {
   return !!match && Number(match[1]) > Date.now() / 1000 && secureEqual(match[2], signature(match[1]));
 }
 
-export async function previewRequest(path: "snapshot" | "token" | "connections", payload?: object) {
+export async function previewRequest(path: "snapshot" | "token" | "connections" | "reconciliation" | "position-links", payload?: object) {
   if (!await hasPreviewSession()) return;
   const bearer = createHmac("sha256", previewPassword()).update("balsave/preview/backend").digest("hex");
   const origin = process.env.BALSAVE_BACKEND_URL ?? "http://127.0.0.1:8000";

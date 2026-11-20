@@ -37,7 +37,6 @@ export const mockBalanceSnapshots = [
   { month: "2026-08", balances: [420000, 180000, 440000, 275000] },
   { month: "2026-09", balances: [590000, 185000, 490000, 295000] },
   { month: "2026-10", balances: [620000, 190000, 570000, 310000] },
-  { month: mockAsOf.slice(0, 7), balances: mockAccounts.map(account => account.balanceCents) },
 ].map(({ month, balances }) => ({
   month,
   accounts: mockAccounts.map((account, index) => ({ ...account, balanceCents: balances[index] })),

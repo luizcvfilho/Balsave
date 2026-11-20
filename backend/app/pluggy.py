@@ -39,6 +39,8 @@ def request(
     endpoint = path.split("?", 1)[0]
     if endpoint.startswith("/items/"):
         endpoint = "/items/{id}"
+    elif endpoint.startswith("/investments/"):
+        endpoint = "/investments/{id}/transactions"
     headers = {"Accept": "application/json"}
     if api_key is not None:
         headers["X-API-KEY"] = api_key
@@ -182,6 +184,28 @@ def inspect_accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
 
 def accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
     return results(request("/accounts?" + urlencode({"itemId": item_id}), api_key=api_key))
+
+
+def investment_pages(path: str, api_key: str, **filters: str) -> Iterator[dict[str, Any]]:
+    page = 1
+    while True:
+        query = urlencode({**filters, "page": page, "pageSize": 500})
+        data = request(f"{path}?{query}", api_key=api_key)
+        total_pages = data.get("totalPages")
+        if data.get("page") != page or type(total_pages) is not int or total_pages < 0:
+            raise PluggyError("Pluggy returned invalid investment pagination.")
+        yield from results(data)
+        if page >= total_pages:
+            return
+        page += 1
+
+
+def investments(item_id: UUID, api_key: str) -> Iterator[dict[str, Any]]:
+    return investment_pages("/investments", api_key, itemId=str(item_id))
+
+
+def investment_transactions(investment_id: str, api_key: str) -> Iterator[dict[str, Any]]:
+    return investment_pages(f"/investments/{investment_id}/transactions", api_key)
 
 
 def institutions(api_key: str) -> Iterator[dict[str, Any]]:

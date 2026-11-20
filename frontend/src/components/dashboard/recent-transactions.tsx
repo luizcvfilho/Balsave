@@ -3,10 +3,10 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import { isIncoming, type Transaction, transactionCategory } from "../../lib/finance";
+import { isIncoming, ledgerBalanceImpact, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatShortDate, formatSignedMoney } from "../../lib/format";
 import { SectionCard } from "../cards/section-card";
-import { amountColors } from "../details/transaction-table";
+import { balanceImpactColor } from "../details/transaction-table";
 
 export function RecentTransactions({ transactions, getHref }: {
   transactions: Transaction[];
@@ -17,6 +17,7 @@ export function RecentTransactions({ transactions, getHref }: {
       <List disablePadding role="list">
         {transactions.map((transaction, index) => {
           const incoming = isIncoming(transaction);
+          const impact = ledgerBalanceImpact(transaction);
           return (
             <ListItem
               key={transaction.id}
@@ -36,13 +37,14 @@ export function RecentTransactions({ transactions, getHref }: {
               <Typography
                 variant="body2"
                 sx={{
-                  color: amountColors[transaction.kind],
+                  color: balanceImpactColor(impact),
                   fontWeight: 600,
                   fontVariantNumeric: "tabular-nums",
                   marginInlineStart: "auto",
                 }}
               >
                 {formatSignedMoney(incoming ? transaction.amountCents : -transaction.amountCents)}
+                {impact === 0 && <span className="sr-only">Movimentação interna ou sem efeito no saldo.</span>}
               </Typography>
             </ListItem>
           );

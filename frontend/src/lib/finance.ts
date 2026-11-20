@@ -30,6 +30,13 @@ export type Transaction = {
   amountCents: number;
   accountId?: string;
   cardId?: string;
+  investmentId?: string;
+  balanceImpactCents?: number;
+  reconciliation?: "automatic" | "confirmed";
+  counterpartId?: string;
+  transferAccountId?: string;
+  transferCashCents?: number;
+  reconciliationCostCents?: number;
   paymentMethod?: keyof typeof paymentMethodLabels;
 } & (
   | {
@@ -42,7 +49,7 @@ export type Transaction = {
   | { kind: "refund"; expenseId: string }
   | { kind: "income" }
   | { kind: "credit" }
-  | { kind: "transfer"; direction?: "in" | "out" }
+  | { kind: "transfer"; direction?: "in" | "out"; internalTransfer?: "account" | "investment"; transferAccountId?: string }
 );
 
 export type Expense = Extract<Transaction, { kind: "expense" }>;
@@ -59,6 +66,25 @@ export const transactionKindLabels = {
 export function isIncoming(transaction: Transaction) {
   return transaction.kind === "income" || transaction.kind === "refund" || transaction.kind === "credit"
     || (transaction.kind === "transfer" && transaction.direction === "in");
+}
+
+export function bankBalanceImpact(transaction: Transaction) {
+  if (!transaction.accountId && !transaction.investmentId) return 0;
+  return transaction.balanceImpactCents ?? (isIncoming(transaction) ? transaction.amountCents : -transaction.amountCents);
+}
+
+export function ledgerBalanceImpact(transaction: Transaction) {
+  return transaction.reconciliation ? 0 : bankBalanceImpact(transaction);
+}
+
+export function bankTransfersAfterMonth(transactions: readonly Transaction[], accounts: ReadonlySet<string>, month: string) {
+  return transactions.reduce((sum, transaction) => {
+    const positionId = transaction.accountId ?? transaction.investmentId;
+    if (transaction.kind !== "transfer" || !positionId || !transaction.transferAccountId
+      || !accounts.has(positionId) || !accounts.has(transaction.transferAccountId)
+      || transaction.date.slice(0, 7) <= month) return sum;
+    return sum + (transaction.transferCashCents ?? bankBalanceImpact(transaction));
+  }, 0);
 }
 
 const categoriesByMerchantType: ReadonlyMap<string, string> = new Map([
@@ -84,7 +110,7 @@ export function transactionCategory(transaction: Transaction) {
     case "credit":
       return "Crédito";
     case "transfer":
-      return "Transferência";
+      return transaction.internalTransfer || transaction.balanceImpactCents === 0 ? "Transferência interna" : "Transferência";
   }
 }
 

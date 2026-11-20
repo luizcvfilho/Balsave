@@ -22,7 +22,6 @@ type Props = {
   onSelect?: (index: number) => void;
   axisLabel: string;
   zeroBased?: boolean;
-  partialLastPoint?: boolean;
   compareToReference?: boolean;
 };
 
@@ -85,7 +84,7 @@ function chartScale(values: number[], zeroBased: boolean) {
 
 export function LineChart({
   points, series, axisIndices, initialIndex, selectedIndex: controlledIndex, axisLabel, onSelect,
-  zeroBased = false, partialLastPoint = false, compareToReference = false,
+  zeroBased = false, compareToReference = false,
 }: Props) {
   const [localIndex, setSelectedIndex] = useState(initialIndex);
   const selectedIndex = controlledIndex ?? localIndex;
@@ -182,18 +181,13 @@ export function LineChart({
                 const cents = amounts[seriesIndex];
                 return cents === null ? [] : [`${x(index)},${y(cents)}`];
               });
-              const split = partialLastPoint && style === "actual";
               return (
-                <g key={style}>
-                  <polyline
-                    className={`chart-line chart-${style}`}
-                    points={(split ? positions.slice(0, -1) : positions).join(" ")}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  {split && (
-                    <polyline className="chart-line chart-actual chart-partial" points={positions.slice(-2).join(" ")} vectorEffect="non-scaling-stroke" />
-                  )}
-                </g>
+                <polyline
+                  key={style}
+                  className={`chart-line chart-${style}`}
+                  points={positions.join(" ")}
+                  vectorEffect="non-scaling-stroke"
+                />
               );
             })}
           </svg>

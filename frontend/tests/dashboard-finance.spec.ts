@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import {
+  bankBalanceImpact,
+  bankTransfersAfterMonth,
   categoryBreakdown,
   expensesWithRefunds,
+  ledgerBalanceImpact,
   spendingByMonth,
   spendingPace,
   summarizeBalances,
@@ -21,6 +24,45 @@ test("consolidates accounts by bank and totals card usage and limits separately"
     { bank: "A", lastFour: "1234", usedCents: 250001, limitCents: 300000 },
     { bank: "A", lastFour: "5678", usedCents: 230002, limitCents: 900000 },
   ])).toEqual({ usedCents: 480003, limitCents: 1200000 });
+});
+
+test("keeps individual bank movements and removes paired transfers from consolidated month-end changes", () => {
+  const sent = {
+    id: "sent", name: "Pix sent", kind: "transfer", direction: "out", internalTransfer: "account", reconciliation: "automatic",
+    accountId: "bank-a", transferAccountId: "bank-b", date: "2026-10-31", amountCents: 50000, balanceImpactCents: -50000,
+  } as const;
+  const received = {
+    id: "received", name: "Pix received", kind: "transfer", direction: "in", internalTransfer: "account", reconciliation: "automatic",
+    accountId: "bank-b", transferAccountId: "bank-a", date: "2026-11-01", amountCents: 50000, balanceImpactCents: 50000,
+  } as const;
+  const other = { ...received, id: "other", internalTransfer: "investment", transferAccountId: undefined } as const;
+  const movements = [sent, received, other];
+  const bothBanks = new Set(["bank-a", "bank-b"]);
+  expect(bankBalanceImpact(sent)).toBe(-50000);
+  expect(ledgerBalanceImpact(sent)).toBe(0);
+  expect(ledgerBalanceImpact(other)).toBe(0);
+  expect(bankBalanceImpact(other)).toBe(50000);
+  expect(bankTransfersAfterMonth(movements, bothBanks, "2026-09")).toBe(0);
+  expect(bankTransfersAfterMonth(movements, bothBanks, "2026-10")).toBe(50000);
+  expect(bankTransfersAfterMonth(movements, bothBanks, "2026-11")).toBe(0);
+  expect(bankTransfersAfterMonth(movements, new Set(["bank-b"]), "2026-10")).toBe(0);
+});
+
+test("reconciles an investment redemption across month-end while preserving its tax difference", () => {
+  const redemption = {
+    id: "redemption", name: "Redemption", kind: "transfer", direction: "out", investmentId: "fund",
+    transferAccountId: "bank", date: "2026-10-31", amountCents: 10200, balanceImpactCents: -10200,
+    transferCashCents: -10000, reconciliation: "automatic",
+  } as const;
+  const bankCredit = {
+    id: "credit", name: "Credit", kind: "transfer", direction: "in", accountId: "bank",
+    transferAccountId: "fund", date: "2026-11-01", amountCents: 10000, balanceImpactCents: 10000,
+    transferCashCents: 10000, reconciliation: "automatic",
+  } as const;
+  const movements = [redemption, bankCredit];
+  expect(movements.reduce((sum, movement) => sum + bankBalanceImpact(movement), 0)).toBe(-200);
+  expect(bankTransfersAfterMonth(movements, new Set(["bank", "fund"]), "2026-10")).toBe(10000);
+  expect(bankTransfersAfterMonth(movements, new Set(["bank", "fund"]), "2026-09")).toBe(0);
 });
 
 test("shares the net spend with refund tracking and counts only credits received as of the report date", () => {

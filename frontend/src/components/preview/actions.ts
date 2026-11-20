@@ -42,3 +42,13 @@ export async function registerConnection(itemId: string) {
   const result = await previewRequest("connections", { itemId });
   return !!result?.ok;
 }
+
+export async function saveReconciliation(payload: { entryId: string; counterpartId: string | null; remove?: boolean }) {
+  const result = await previewRequest("reconciliation", payload);
+  return !!result?.ok;
+}
+
+export async function saveInvestmentPosition(payload: { investmentId: string; accountId: string | null }) {
+  const result = await previewRequest("position-links", payload);
+  return !!result?.ok;
+}

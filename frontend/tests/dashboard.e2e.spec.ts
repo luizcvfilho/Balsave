@@ -45,7 +45,8 @@ test("keeps category colors stable and communicates spending and transaction dir
   await expect(transactions.getByText(/\+R\$\s*6\.850,00/)).toHaveCSS("color", "rgb(40, 113, 79)");
   await expect(transactions.getByText(/\+R\$\s*500,00/)).toHaveCSS("color", "rgb(40, 113, 79)");
   await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
-  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
+  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
+  await expect(transactions.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
 });
 
 test.describe("mobile layout", () => {

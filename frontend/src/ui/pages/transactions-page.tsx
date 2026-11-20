@@ -12,7 +12,7 @@ import { useReportQuery } from "../../components/details/report-query";
 import { kindOptions, orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
-import { isIncoming, type Transaction, transactionCategory, transactionKindLabels } from "../../lib/finance";
+import { bankBalanceImpact, isIncoming, type Transaction, transactionCategory, transactionKindLabels } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
 import { optionValue } from "../../lib/report-links";
 
@@ -87,7 +87,8 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
   }), order);
 
   return (
-    <SectionCard id="historico-lancamentos" title="Histórico de lançamentos">
+    <SectionCard id="historico-lancamentos" title="Histórico de lançamentos"
+      description="Verde indica entradas externas, vermelho indica saídas externas e cinza indica movimentações internas ou lançamentos sem efeito no saldo.">
       <div className="report-filters">
         <PeriodFields period={period} update={update} />
         <ReportSelect label="Tipo" value={type} options={types} onChange={value => update({ tipo: value })} />
@@ -96,7 +97,7 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
         <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
       </div>
       <p className="report-muted" role="status">{rows.length} {rows.length === 1 ? "lançamento" : "lançamentos"}</p>
-      <TransactionTable label="Lançamentos filtrados" rows={rows} getHref={id => href({ lancamento: id })} />
+      <TransactionTable label="Lançamentos filtrados" rows={rows} balanceScope="consolidated" getHref={id => href({ lancamento: id })} />
     </SectionCard>
   );
 }
@@ -185,12 +186,14 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
     return expense.id === expenseId;
   });
   const source = transactionSource(transaction);
+  const impact = bankBalanceImpact(transaction);
 
   return (
     <>
       <SectionCard id="detalhe-lancamento" title={transaction.name} description={formatDate(transaction.date)}>
         <ReportMetrics items={[
           { label: "Valor", value: formatSignedMoney(isIncoming(transaction) ? transaction.amountCents : -transaction.amountCents) },
+          { label: transaction.accountId ? "Impacto nesta conta" : transaction.investmentId ? "Impacto neste investimento" : "Impacto no saldo em contas", value: impact === 0 ? "Sem efeito" : formatSignedMoney(impact) },
           { label: "Tipo", value: transactionKindLabels[transaction.kind] },
           { label: "Categoria", value: transactionCategory(transaction) },
           ...(source ? [{ label: "Conta ou cartão", value: source }] : []),

@@ -26,7 +26,7 @@ export function DashboardPage() {
   const { params, update } = useReportQuery();
   const {
     accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
-    balanceHistory, balanceChartPoint, failedConnections, live,
+    balanceHistory, balanceChartPoint, failedConnections, failedInvestments, investments, live,
   } = useFinancialReports();
   const currentDay = Number(asOf.slice(8));
   const balances = summarizeBalances(accountBalances(accounts));
@@ -34,7 +34,8 @@ export function DashboardPage() {
   const categoryPeriods = planningMonths.map(month => categoryBreakdown(spending, month));
   const pacePoints = paceChartPoints(currentMonth);
   const comparison = canCompare(currentMonth);
-  const history = balanceHistory().slice(1);
+  const evolution = balanceHistory();
+  const history = evolution.points.slice(-6);
   const balancePoints = history.map(balanceChartPoint);
   const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
   const recentTransactions = live ? latest.slice(0, 10) : latest;
@@ -73,6 +74,7 @@ export function DashboardPage() {
       {failedConnections > 0 && (
         <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>
       )}
+      {!!failedInvestments && <p className="report-muted" role="status">Alguns investimentos estão indisponíveis. O saldo consolidado pode estar incompleto.</p>}
 
       <Box sx={{ display: "grid", gap: "inherit", gridTemplateColumns: { sm: twoColumns } }}>
         <MetricCard
@@ -162,19 +164,18 @@ export function DashboardPage() {
 
       <SectionCard
         id="evolucao"
-        title="Evolução do saldo em contas"
+        title={investments.length ? "Evolução de contas e investimentos" : "Evolução do saldo em contas"}
         href={details("/contas", { aba: "evolucao", ponto: history[balanceIndex]?.month })}
-        description={history.length ? "Saldo no fechamento de cada mês e saldo atual do mês em andamento" : undefined}
+        description={evolution.description ?? (history.length > 1 ? "Saldo no último dia de cada mês" : undefined)}
       >
         {balancePoints.length > 1 ? <LineChart
           points={balancePoints}
-          series={[{ label: "Saldo consolidado", style: "actual" }]}
+          series={[{ label: evolution.partial ? "Saldo das contas com histórico" : "Saldo consolidado", style: "actual" }]}
           axisIndices={balancePoints.map((_, index) => index)}
           initialIndex={balancePoints.length - 1}
           onSelect={setBalanceIndex}
           axisLabel="Mês no gráfico de evolução do saldo"
-          partialLastPoint
-        /> : <p className="report-muted">Histórico de saldos mensais indisponível para estas conexões.</p>}
+        /> : <p className="report-muted">{evolution.emptyMessage}</p>}
       </SectionCard>
 
       <RecentTransactions

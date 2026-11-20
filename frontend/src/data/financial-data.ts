@@ -6,6 +6,9 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   balanceCents: number | null;
 };
 
+export type ReportInvestment = ReportAccount & { asOf: string; includedInAccountId?: string };
+export type ReconciliationCandidate = { entryId: string; counterpartId: string | null };
+
 export type PlannedInstallment = {
   id: string;
   transactionId?: string;
@@ -28,9 +31,12 @@ export type ReportCard = CreditCard & {
 export type FinancialData = {
   asOf: string;
   accounts: ReportAccount[];
+  investments?: ReportInvestment[];
+  reconciliationCandidates?: ReconciliationCandidate[];
+  failedInvestments?: number;
   cards: ReportCard[];
   transactions: Transaction[];
-  balanceSnapshots: { month: string; accounts: AccountBalance[] }[];
+  balanceSnapshots: { month: string; accounts: (AccountBalance & { id: string })[] }[];
   spendingMonths?: string[];
   connectionCount: number;
   failedConnections: number;

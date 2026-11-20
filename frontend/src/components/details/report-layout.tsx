@@ -12,7 +12,7 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
   children: ReactNode;
   back?: { href: string; label: string };
 }) {
-  const { live, months, failedConnections } = useFinancialReports();
+  const { live, months, failedConnections, failedInvestments } = useFinancialReports();
   const month = optionValue(dashboardMonth, months);
   const backLink = back ?? { href: reportHref("/", { mes: month }), label: "Voltar ao painel" };
 
@@ -26,6 +26,7 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
         </div>
       </header>
       {failedConnections > 0 && <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>}
+      {!!failedInvestments && <p className="report-muted" role="status">Alguns investimentos estão indisponíveis. O saldo consolidado pode estar incompleto.</p>}
       {children}
     </Container>
   );

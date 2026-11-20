@@ -2,14 +2,16 @@
 
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import {
-  daysInMonth, expensesWithRefunds, previousMonths, spendingByMonth, spendingPace, summarizeBalances,
+  bankTransfersAfterMonth, daysInMonth, expensesWithRefunds, previousMonths, spendingByMonth, spendingPace, summarizeBalances,
   type Transaction, transactionCategory,
 } from "../lib/finance";
-import { formatDate, formatMonth, formatMonthName, formatShortMonth } from "../lib/format";
+import { formatDate, formatMoney, formatMonth, formatMonthName, formatShortMonth } from "../lib/format";
 import { cardLabel, type FinancialData } from "./financial-data";
 
 function buildReports(data: FinancialData, live: boolean) {
   const { accounts, asOf, balanceSnapshots, cards } = data;
+  const investments = data.investments ?? [];
+  const positions = [...accounts, ...investments.filter(position => !position.includedInAccountId)];
   const currentMonth = asOf.slice(0, 7);
   const reportedTransactions = data.transactions.filter(transaction => transaction.date <= asOf);
   const months = data.spendingMonths ?? [...new Set([
@@ -33,6 +35,7 @@ function buildReports(data: FinancialData, live: boolean) {
   for (const card of cards) {
     sources.set(card.id, cardLabel(card));
   }
+  for (const investment of investments) sources.set(investment.id, `${investment.bank} · ${investment.name}`);
 
   function paceChartPoints(month: string) {
     const end = month === currentMonth ? asOf : `${month}-${daysInMonth(month)}`;
@@ -49,26 +52,48 @@ function buildReports(data: FinancialData, live: boolean) {
   }
 
   function balanceHistory(bank?: string) {
-    return balanceSnapshots.map(({ month, accounts }) => ({
+    const snapshots = balanceSnapshots.filter(({ month }) => month < currentMonth).map(({ month, accounts }) => ({
       month,
-      cents: summarizeBalances(accounts.filter(account => !bank || account.bank === bank)).totalCents,
-    }));
+      accounts: accounts.filter(account => !bank || account.bank === bank),
+    })).filter(snapshot => snapshot.accounts.length > 0);
+    const latestClosed = snapshots.at(-1);
+    // Use the same accounts for the entire series so changes reflect movements within a fixed set.
+    const comparable = new Set(latestClosed?.accounts.map(account => account.id));
+    const points = snapshots.flatMap(({ month, accounts }) => {
+      const included = accounts.filter(account => comparable.has(account.id));
+      return included.length === comparable.size
+        ? [{ month, cents: summarizeBalances(included).totalCents + bankTransfersAfterMonth(reportedTransactions, comparable, month) }]
+        : [];
+    });
+    const available = positions.filter(account => !bank || account.bank === bank).length;
+    const partial = comparable.size < available;
+    const coverage = partial ? ` O gráfico cobre ${comparable.size} de ${available} contas disponíveis.` : "";
+    const investmentCoverage = investments.length ? " Investimentos estimados por fluxo de caixa, com a valorização histórica pendente." : "";
+    const description = live && latestClosed
+      ? `Saldo no último dia de cada mês, estimado a partir dos lançamentos efetivados.${coverage}${investmentCoverage}`
+      : undefined;
+    const onlyPoint = points.length === 1 ? points[0] : undefined;
+    const emptyMessage = onlyPoint
+      ? `${balanceChartPoint(onlyPoint).label}. Saldo de ${formatMoney(onlyPoint.cents)}.`
+      : "Ainda não há dados para estimar o fechamento de um mês.";
+    return { points, partial, description, emptyMessage };
   }
 
-  function balanceChartPoint({ month, cents }: ReturnType<typeof balanceHistory>[number]) {
+  function balanceChartPoint({ month, cents }: { month: string; cents: number }) {
+    const closingDate = formatDate(`${month}-${daysInMonth(month)}`);
     return {
       axisLabel: formatShortMonth(month),
-      label: month === currentMonth ? `Saldo em ${formatDate(asOf)}` : formatMonth(month),
+      label: `${live ? "Fechamento estimado" : "Fechamento"} em ${closingDate}`,
       values: [cents],
     };
   }
 
-  function transactionSource({ accountId, cardId }: Transaction) {
-    return sources.get(accountId ?? cardId ?? "");
+  function transactionSource({ accountId, cardId, investmentId }: Transaction) {
+    return sources.get(accountId ?? cardId ?? investmentId ?? "");
   }
 
   return {
-    ...data, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
+    ...data, investments, positions, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
     plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
     expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
   };

@@ -1,16 +1,22 @@
 /** biome-ignore-all lint/a11y/noRedundantRoles: Retain native table semantics in Safari when the mobile layout stacks the cells. */
 import Link from "next/link";
 import { useFinancialReports } from "../../data/financial-reports";
-import { isIncoming, paymentMethodLabels, type Transaction, transactionCategory } from "../../lib/finance";
+import { bankBalanceImpact, isIncoming, ledgerBalanceImpact, paymentMethodLabels, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
 
-export const amountColors = {
+const amountColors = {
   expense: "var(--negative)",
   income: "var(--positive)",
   refund: "var(--positive)",
   credit: "var(--positive)",
   transfer: "var(--text-secondary)",
 } satisfies Record<Transaction["kind"], string>;
+
+export function balanceImpactColor(impact: number) {
+  if (impact > 0) return "var(--positive)";
+  if (impact < 0) return "var(--negative)";
+  return "var(--text-secondary)";
+}
 
 export type TransactionRow = {
   transaction: Transaction;
@@ -33,11 +39,12 @@ export function orderedTransactions(rows: TransactionRow[], order = "recent") {
   });
 }
 
-export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, empty = "Nenhum lançamento para os filtros selecionados." }: {
+export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, balanceScope, empty = "Nenhum lançamento para os filtros selecionados." }: {
   label: string;
   rows: TransactionRow[];
   getHref: (id: string) => string;
   showPaymentMethod?: boolean;
+  balanceScope?: "account" | "consolidated";
   empty?: string;
 }) {
   const { transactionSource } = useFinancialReports();
@@ -59,6 +66,9 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
           const source = transactionSource(transaction);
           const paymentMethod = transaction.paymentMethod ?? (transaction.cardId ? "credit_card" : undefined);
           const installment = transaction.kind === "expense" ? transaction.installment : undefined;
+          const impact = balanceScope === "account" ? bankBalanceImpact(transaction)
+            : balanceScope === "consolidated" ? ledgerBalanceImpact(transaction) : undefined;
+          const amountColor = impact === undefined ? amountColors[transaction.kind] : balanceImpactColor(impact);
           return (
             <tr role="row" key={transaction.id}>
               <td role="cell" className="report-transaction-name">
@@ -83,11 +93,15 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
                 <time dateTime={transaction.date}>{formatNumericDate(transaction.date)}</time>
               </td>
               <td role="cell" className="report-transaction-amount">
-                <span style={{ color: netCents === undefined ? amountColors[transaction.kind] : undefined }}>
+                <span style={{ color: netCents === undefined ? amountColor : undefined }}>
                   {netCents === undefined
                     ? formatSignedMoney(isIncoming(transaction) ? transaction.amountCents : -transaction.amountCents)
                     : formatMoney(netCents)}
                 </span>
+                {impact === 0 && <span className="sr-only">Movimentação interna ou sem efeito no saldo.</span>}
+                {!!transaction.reconciliationCostCents && <span className="report-cell-detail">
+                  {formatMoney(transaction.reconciliationCostCents)} de custos na movimentação
+                </span>}
                 {!!receivedCents && (
                   <span className="report-cell-detail">
                     De {formatMoney(transaction.amountCents)} · {formatMoney(receivedCents)} reembolsados

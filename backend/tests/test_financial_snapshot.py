@@ -1,10 +1,11 @@
+from datetime import datetime
 from decimal import Decimal
 from unittest import TestCase
 from unittest.mock import patch
 from uuid import UUID
 
 from app import pluggy
-from app.financial_snapshot import institution_names, load_item, normalize_card, normalize_transaction
+from app.financial_snapshot import institution_names, load_item, load_snapshot, normalize_card, normalize_transaction
 
 
 ACCOUNT = "2f5fb14d-49a8-43db-955c-580165f7ea4e"
@@ -158,7 +159,7 @@ class FinancialSnapshotTests(TestCase):
                 patch.object(pluggy, "accounts", return_value=[card]),
                 patch.object(pluggy, "transactions", return_value=[first]),
             ):
-                _, cards, entries = load_item(UUID(ACCOUNT), "test", "2026-12-17", "Mock Bank", {})
+                _, cards, entries, _, _ = load_item(UUID(ACCOUNT), "test", "2026-12-17", "Mock Bank", {})
                 self.assertEqual([row["installment"]["number"] for row in entries], [1])
                 self.assertEqual([row["number"] for row in cards[0]["installments"]], expected)
 
@@ -201,7 +202,7 @@ class FinancialSnapshotTests(TestCase):
             patch.object(pluggy, "accounts", return_value=[record]),
             patch.object(pluggy, "transactions", return_value=[transaction]),
         ):
-            accounts, _, entries = load_item(UUID(ACCOUNT), "test", "2026-11-14", "Connection 1", {})
+            accounts, _, entries, _, _ = load_item(UUID(ACCOUNT), "test", "2026-11-14", "Connection 1", {})
         self.assertEqual((entries[0]["kind"], entries[0]["direction"]), ("transfer", "out"))
         self.assertNotIn("taxNumber", accounts[0])
         self.assertNotIn("paymentData", entries[0])
@@ -209,11 +210,11 @@ class FinancialSnapshotTests(TestCase):
     def test_investments_and_explicit_same_owner_movements_are_transfers(self):
         for fields in (
             {"category": "Same person transfer - PIX"},
-            {"description": "TED entre contas próprias"},
+            {"category": "Same person transfer - TED"},
             {"category": "Mutual funds"},
-            {"description": "Aplicação em fundo"},
-            {"descriptionRaw": "APLIC. BB REND FÁCIL"},
-            {"type": "CREDIT", "description": "BB Rende Fácil"},
+            {"operationType": "APLICACAO_FINANCEIRA"},
+            {"category": "Automatic investment"},
+            {"type": "CREDIT", "operationType": "RESGATE_APLIC_FINANCEIRA"},
             {"type": "CREDIT", "operationType": "RESGATE_APLIC_FINANCEIRA"},
         ):
             with self.subTest(fields=fields):
@@ -274,6 +275,124 @@ class FinancialSnapshotTests(TestCase):
         with patch.object(pluggy, "institutions", side_effect=pluggy.PluggyError):
             self.assertEqual(institution_names("test"), {})
 
+    def test_monthly_balances_reverse_booked_bank_movements_within_statement_coverage(self):
+        second_account = "21b60fa8-4738-4882-b341-edb1d7989529"
+        card = "3de43b4b-74cb-4a79-a978-dd6555b77328"
+        records = [
+            {"id": ACCOUNT, "type": "BANK", "currencyCode": "BRL", "balance": Decimal("100.23")},
+            {"id": second_account, "type": "BANK", "currencyCode": "BRL", "balance": 0},
+            {"id": card, "type": "CREDIT", "subtype": "CREDIT_CARD", "currencyCode": "BRL", "balance": 90},
+        ]
+        transfer = {
+            **self.entry, "date": "2026-11-12", "amount": Decimal("-25.25"), "category": "Same person transfer",
+        }
+        inflow = {
+            **self.entry, "id": "cbea60b5-7d9f-4da3-986b-9c92e2b174f4",
+            "date": "2026-11-01T03:00:00Z", "amount": Decimal("10.12"), "type": "CREDIT",
+        }
+        before_midnight = {
+            **transfer, "id": "8564aec7-cf8b-454c-b26f-3d0c4c95a16a",
+            "date": "2026-11-01T02:59:59Z", "amount": Decimal("-11.11"),
+        }
+        oldest = {**inflow, "id": "07e5c706-6f58-4edd-bca0-181a6fd48f92", "date": "2026-08-09"}
+        transactions = {
+            ACCOUNT: [transfer, {**transfer, "status": "PENDING"}, inflow, before_midnight, transfer, oldest],
+            second_account: [
+                {**oldest, "accountId": second_account},
+                {**inflow, "accountId": second_account, "amount": None},
+            ],
+            card: [{**inflow, "accountId": card, "type": "DEBIT", "amount": 90}],
+        }
+        with (
+            patch("app.financial_snapshot.datetime", wraps=datetime) as clock,
+            patch.object(pluggy, "meu_pluggy_item"),
+            patch.object(pluggy, "institutions", return_value=[]),
+            patch.object(pluggy, "investments", return_value=[]),
+            patch.object(pluggy, "accounts", return_value=records),
+            patch.object(pluggy, "transactions", side_effect=lambda account_id, _: transactions[account_id]),
+        ):
+            clock.now.return_value = datetime(2026, 11, 14)
+            snapshot = load_snapshot((UUID(ACCOUNT),), "test")
+
+        self.assertEqual([
+            (point["month"], {account["id"]: account["balanceCents"] for account in point["accounts"]})
+            for point in snapshot["balanceSnapshots"]
+        ], [
+            ("2026-08", {ACCOUNT: 12647}),
+            ("2026-09", {ACCOUNT: 12647}),
+            ("2026-10", {ACCOUNT: 11536}),
+        ])
+        self.assertEqual([account["balanceCents"] for account in snapshot["accounts"]], [10023, 0])
+
+    def test_snapshot_links_unique_same_owner_transfers_across_connected_accounts(self):
+        first_item, second_item = UUID(int=1), UUID(int=2)
+        first_account, second_account = str(UUID(int=3)), str(UUID(int=4))
+        accounts = {
+            first_item: [{"id": first_account, "type": "BANK", "currencyCode": "BRL", "balance": 2500}],
+            second_item: [{"id": second_account, "type": "BANK", "currencyCode": "BRL", "balance": 500}],
+        }
+        transfer = {**self.entry, "category": "Same person transfer - PIX", "amount": 500}
+        transactions = {
+            first_account: [
+                {**transfer, "id": str(UUID(int=5)), "accountId": first_account, "date": "2026-10-31"},
+                {**transfer, "id": str(UUID(int=6)), "accountId": first_account, "date": "2026-11-04", "amount": 700},
+            ],
+            second_account: [
+                {**transfer, "id": str(UUID(int=7)), "accountId": second_account, "date": "2026-11-01", "type": "CREDIT"},
+                {**transfer, "id": str(UUID(int=8)), "accountId": second_account, "date": "2026-11-04", "amount": 700,
+                 "type": "CREDIT", "category": None, "operationType": "PIX"},
+            ],
+        }
+        with (
+            patch("app.financial_snapshot.datetime", wraps=datetime) as clock,
+            patch.object(pluggy, "meu_pluggy_item"),
+            patch.object(pluggy, "institutions", return_value=[]),
+            patch.object(pluggy, "investments", return_value=[]),
+            patch.object(pluggy, "accounts", side_effect=lambda item_id, _: accounts[item_id]),
+            patch.object(pluggy, "transactions", side_effect=lambda account_id, _: transactions[account_id]),
+        ):
+            clock.now.return_value = datetime(2026, 11, 14)
+            entries = load_snapshot((first_item, second_item), "test")["transactions"]
+        self.assertEqual([entry.get("transferAccountId") for entry in entries], [second_account, first_account, None, None])
+        self.assertEqual([entry.get("internalTransfer") for entry in entries], ["account", "account", "account", None])
+        self.assertEqual([entry["balanceImpactCents"] for entry in entries], [-50000, 50000, -70000, 70000])
+
+    def test_snapshot_loads_generic_fund_positions_and_preserves_tax_in_a_matched_redemption(self):
+        investment_id = str(UUID(int=10))
+        bank = {"id": ACCOUNT, "type": "BANK", "currencyCode": "BRL", "balance": 1100, "updatedAt": "2026-11-14"}
+        position = {
+            "id": investment_id, "itemId": ACCOUNT, "currencyCode": "BRL", "name": "Unrelated fund name",
+            "balance": 900, "date": "2026-11-14", "code": "12.345.678/0001-95", "type": "MUTUAL_FUND",
+        }
+        bank_entries = [
+            {**self.entry, "id": str(UUID(int=11)), "date": "2026-10-01", "amount": 10, "type": "CREDIT"},
+            {**self.entry, "id": str(UUID(int=12)), "date": "2026-11-07", "amount": 100, "type": "CREDIT",
+             "operationType": "RESGATE_APLIC_FINANCEIRA"},
+        ]
+        fund_entries = [
+            {"id": str(UUID(int=13)), "date": "2026-10-01", "amount": 1000, "netAmount": 1000, "type": "BUY"},
+            {"id": str(UUID(int=14)), "date": "2026-11-07", "amount": 102, "netAmount": 100, "type": "SELL"},
+        ]
+        with (
+            patch("app.financial_snapshot.datetime", wraps=datetime) as clock,
+            patch.object(pluggy, "meu_pluggy_item"),
+            patch.object(pluggy, "institutions", return_value=[]),
+            patch.object(pluggy, "accounts", return_value=[bank]),
+            patch.object(pluggy, "transactions", return_value=bank_entries),
+            patch.object(pluggy, "investments", return_value=[position]),
+            patch.object(pluggy, "investment_transactions", return_value=fund_entries),
+        ):
+            clock.now.return_value = datetime(2026, 11, 14)
+            snapshot = load_snapshot((UUID(ACCOUNT),), "test")
+            included = load_snapshot((UUID(ACCOUNT),), "test", position_links={investment_id: ACCOUNT})
+        self.assertEqual(snapshot["investments"][0]["balanceCents"], 90000)
+        self.assertEqual(sum(point["balanceCents"] for point in snapshot["balanceSnapshots"][0]["accounts"]), 200200)
+        matched = [entry for entry in snapshot["transactions"] if entry.get("reconciliation") == "automatic"]
+        self.assertEqual(len(matched), 2)
+        self.assertEqual(sum(entry["balanceImpactCents"] for entry in matched), -200)
+        self.assertEqual(included["balanceSnapshots"][0]["accounts"], [{"id": ACCOUNT, "bank": "Meu Pluggy · conexão 1", "balanceCents": 110200}])
+        self.assertTrue(all(not any(key.startswith("_") for key in entry) for entry in snapshot["transactions"]))
+
     def load_accounts(self, *transfer_numbers):
         records = [
             {
@@ -292,7 +411,7 @@ class FinancialSnapshotTests(TestCase):
             patch.object(pluggy, "accounts", return_value=records),
             patch.object(pluggy, "transactions", return_value=[]),
         ):
-            accounts, cards, _ = load_item(
+            accounts, cards, _, _, _ = load_item(
                 UUID(ACCOUNT), "test", "2026-11-14", "Connection 1",
                 {"077": "Banco Inter", "341": "Itaú"},
             )

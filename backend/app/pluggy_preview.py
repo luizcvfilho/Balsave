@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from hashlib import sha256
 from hmac import compare_digest, digest
 from threading import Lock
@@ -8,7 +9,7 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import database, pluggy
 from app.financial_snapshot import load_snapshot
@@ -37,8 +38,37 @@ class Connection(BaseModel):
     itemId: UUID
 
 
+class ReconciliationDecision(BaseModel):
+    entryId: str = Field(pattern=r"^[0-9a-f-]{36}\.[0-9a-f-]{36}$")
+    counterpartId: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}\.[0-9a-f-]{36}$")
+    remove: bool = False
+
+
+class PositionLink(BaseModel):
+    investmentId: UUID
+    accountId: UUID | None = None
+
+
 def response(content: dict) -> JSONResponse:
     return JSONResponse(content, headers={"Cache-Control": "no-store"})
+
+
+def public_snapshot(data: dict) -> dict:
+    result = deepcopy(data)
+    for record in [*result["accounts"], *result.get("investments", []), *result["transactions"]]:
+        for key in [key for key in record if key.startswith("_")]:
+            del record[key]
+    return result
+
+
+def load_owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dict:
+    decisions = {row[0]: {"counterpartId": row[1], "fingerprint": row[2]} for row in connection.execute(
+        "SELECT entry_id, counterpart_id, fingerprint FROM balsave.reconciliation_decisions WHERE user_id = %s", (owner,),
+    ).fetchall()}
+    links = {str(row[0]): str(row[1]) if row[1] else None for row in connection.execute(
+        "SELECT investment_id, account_id FROM balsave.investment_account_links WHERE user_id = %s", (owner,),
+    ).fetchall()}
+    return load_snapshot(items, api_key(), decisions=decisions, position_links=links, include_evidence=True)
 
 
 def owner_and_items() -> tuple[UUID, tuple[UUID, ...]]:
@@ -103,7 +133,7 @@ def snapshot() -> JSONResponse:
     global cached_snapshot
 
     try:
-        _, items = owner_and_items()
+        owner, items = owner_and_items()
         if not items:
             return response({"connected": False})
         with snapshot_lock:
@@ -111,9 +141,70 @@ def snapshot() -> JSONResponse:
             if cached_snapshot and cached_snapshot[0] == items and now < cached_snapshot[1]:
                 data = cached_snapshot[2]
             else:
-                data = load_snapshot(items, api_key())
-                if not data["failedConnections"]:
+                with database.connect() as connection:
+                    data = load_owner_snapshot(owner, items, connection)
+                if not data["failedConnections"] and not data["failedInvestments"]:
                     cached_snapshot = (items, monotonic() + 300, data)
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not load financial data") from None
-    return response({"connected": True, "data": data})
+    return response({"connected": True, "data": public_snapshot(data)})
+
+
+@router.post("/reconciliation")
+def reconcile_transfer(payload: ReconciliationDecision) -> JSONResponse:
+    global cached_snapshot
+    try:
+        owner, items = owner_and_items()
+        with snapshot_lock, database.connect() as connection:
+            connection.execute("SELECT user_id FROM balsave.preview_owner WHERE user_id = %s FOR UPDATE", (owner,)).fetchone()
+            if payload.remove:
+                connection.execute(
+                    "DELETE FROM balsave.reconciliation_decisions WHERE user_id = %s AND (entry_id = %s OR counterpart_id = %s)",
+                    (owner, payload.entryId, payload.entryId),
+                )
+            else:
+                data = load_owner_snapshot(owner, items, connection)
+                chosen = {"entryId": payload.entryId, "counterpartId": payload.counterpartId}
+                reverse = {"entryId": payload.counterpartId, "counterpartId": payload.entryId}
+                entries = {entry["id"]: entry for entry in data["transactions"]}
+                existing = entries.get(payload.entryId, {})
+                if existing.get("reconciliation") == "confirmed" and existing.get("counterpartId") == payload.counterpartId:
+                    return response({"saved": True})
+                if chosen not in data["reconciliationCandidates"] and reverse not in data["reconciliationCandidates"]:
+                    raise HTTPException(status_code=409, detail="The reconciliation candidate is no longer available")
+                selected = [payload.entryId] + ([payload.counterpartId] if payload.counterpartId else [])
+                for entry_id in selected:
+                    counterpart = payload.counterpartId if entry_id == payload.entryId else payload.entryId
+                    connection.execute(
+                        "INSERT INTO balsave.reconciliation_decisions (user_id, entry_id, counterpart_id, fingerprint) VALUES (%s, %s, %s, %s)",
+                        (owner, entry_id, counterpart, entries[entry_id]["_fingerprint"]),
+                    )
+            cached_snapshot = None
+    except (KeyError, psycopg.Error, pluggy.PluggyError):
+        raise HTTPException(status_code=503, detail="Could not save reconciliation") from None
+    return response({"saved": True})
+
+
+@router.post("/position-links")
+def link_position(payload: PositionLink) -> JSONResponse:
+    global cached_snapshot
+    try:
+        owner, items = owner_and_items()
+        with snapshot_lock, database.connect() as connection:
+            connection.execute("SELECT user_id FROM balsave.preview_owner WHERE user_id = %s FOR UPDATE", (owner,)).fetchone()
+            data = load_owner_snapshot(owner, items, connection)
+            investments = {position["id"]: position for position in data["investments"]}
+            accounts = {account["id"]: account for account in data["accounts"]}
+            investment = investments.get(str(payload.investmentId))
+            account = accounts.get(str(payload.accountId)) if payload.accountId else None
+            if investment is None or (payload.accountId and account is None):
+                raise HTTPException(status_code=403, detail="The position is not available for this connection")
+            connection.execute(
+                """INSERT INTO balsave.investment_account_links (user_id, investment_id, account_id) VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, investment_id) DO UPDATE SET account_id = EXCLUDED.account_id""",
+                (owner, payload.investmentId, payload.accountId),
+            )
+            cached_snapshot = None
+    except (KeyError, psycopg.Error, pluggy.PluggyError):
+        raise HTTPException(status_code=503, detail="Could not save investment balance settings") from None
+    return response({"saved": True})
