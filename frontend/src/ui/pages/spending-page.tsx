@@ -12,7 +12,7 @@ import { useReportQuery } from "../../components/details/report-query";
 import { orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
-import { transactionCategory } from "../../lib/finance";
+import { categoryKeyForLabel, transactionCategory, transactionCategoryKey } from "../../lib/finance";
 import { formatDate, formatMoney, formatMonthName, formatNumericDate } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
@@ -42,7 +42,7 @@ function CategoryExpenses() {
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
   const results = expenses.filter(({ expense }) => period.includes(expense.date)
-    && (!category || transactionCategory(expense) === category)
+    && (!category || transactionCategoryKey(expense) === category)
     && (!installmentsOnly || expense.installment)
     && matchesSearch(search, expense.name));
   const rows = orderedTransactions(results.map(({ expense, receivedCents, netCents }) => ({
@@ -51,7 +51,7 @@ function CategoryExpenses() {
   const total = results.reduce((sum, row) => sum + row.netCents, 0);
   const dashboardMonth = params.get("painelMes") ?? undefined;
   const plansInPeriod = plannedInstallments.filter(plan => period.includes(plan.date));
-  const plans = plansInPeriod.filter(plan => (!category || plan.category === category) && matchesSearch(search, plan.name));
+  const plans = plansInPeriod.filter(plan => (!category || (plan.categoryKey ?? categoryKeyForLabel(plan.category)) === category) && matchesSearch(search, plan.name));
   const plannedCents = plans.reduce((sum, plan) => sum + plan.amountCents, 0);
   const transactionHref = (id: string) => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id });
 
@@ -120,14 +120,14 @@ function SpendingRhythm() {
   const available = day <= lastReported;
   const date = `${month}-${String(day).padStart(2, "0")}`;
   const comparison = canCompare(month);
-  const categories = new Map<string, number>();
+  const categories = new Map<string, { name: string; cents: number }>();
   const dailyRows = [];
   for (const { expense, netCents, receivedCents } of expenses) {
     if (!expense.date.startsWith(month) || expense.date > date) continue;
     if (expense.date === date) dailyRows.push({ transaction: expense, netCents, receivedCents });
     if (netCents === 0) continue;
-    const category = transactionCategory(expense);
-    categories.set(category, (categories.get(category) ?? 0) + netCents);
+    const category = transactionCategoryKey(expense);
+    categories.set(category, { name: transactionCategory(expense), cents: (categories.get(category)?.cents ?? 0) + netCents });
   }
 
   const dashboardMonth = params.get("painelMes") ?? undefined;
@@ -166,12 +166,12 @@ function SpendingRhythm() {
       {available && (
         <SectionCard id="acumulado-categoria" title="Categorias no acumulado">
           {categories.size > 0 ? (
-            <BreakdownList rows={Array.from(categories.entries()).sort((first, second) => second[1] - first[1])
-              .map(([name, cents]) => ({
-                key: name,
+            <BreakdownList rows={Array.from(categories.entries()).sort((first, second) => second[1].cents - first[1].cents)
+              .map(([key, { name, cents }]) => ({
+                key,
                 label: (
                   <Link className="report-link report-action" href={reportHref("/gastos", {
-                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: name, painelMes: dashboardMonth,
+                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: key, painelMes: dashboardMonth,
                   })}>{name}</Link>
                 ),
                 value: formatMoney(cents),

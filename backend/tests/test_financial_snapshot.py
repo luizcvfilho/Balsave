@@ -36,6 +36,12 @@ class FinancialSnapshotTests(TestCase):
             "cardId": ACCOUNT,
             "kind": "expense",
             "category": "Alimentação",
+            "categoryKey": "food",
+            "categorySource": "pluggy",
+            "categoryNeedsReview": False,
+            "providerCategoryId": None,
+            "providerCategoryName": "Groceries",
+            "providerCategoryLabel": "Alimentação",
             "paymentMethod": "credit_card",
         })
 

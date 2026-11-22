@@ -1,14 +1,15 @@
 import { useFinancialReports } from "../../data/financial-reports";
-import { transactionKindLabels } from "../../lib/finance";
+import { transactionCategory, transactionCategoryKey, transactionKindLabels } from "../../lib/finance";
 
 export function useCategoryOptions(ledger = false) {
-  const { expenseCategories, live } = useFinancialReports();
+  const { expenseCategories, reportedTransactions } = useFinancialReports();
   const categories = ledger
-    ? [...new Set([...expenseCategories, "Receitas", "Reembolso", "Transferência", ...(live ? ["Crédito"] : [])])]
+    ? [...new Map(reportedTransactions.map(transaction => [transactionCategoryKey(transaction), transactionCategory(transaction)])).entries()]
+      .map(([value, label]) => ({ value, label })).sort((first, second) => first.label.localeCompare(second.label, "pt-BR"))
     : expenseCategories;
   return [
     { value: "", label: "Todas as categorias" },
-    ...categories.map(category => ({ value: category, label: category })),
+    ...categories,
   ];
 }
 

@@ -47,7 +47,7 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
   balanceScope?: "account" | "consolidated";
   empty?: string;
 }) {
-  const { transactionSource } = useFinancialReports();
+  const { transactionSource, live } = useFinancialReports();
   if (rows.length === 0) return <p className="report-muted">{empty}</p>;
 
   return (
@@ -83,7 +83,13 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
                 </span>}
                 {annotation && <span className="report-cell-detail">{annotation}</span>}
               </td>
-              <td role="cell" className="report-transaction-category">{transactionCategory(transaction)}</td>
+              <td role="cell" className="report-transaction-category">
+                {transactionCategory(transaction)}
+                {transaction.kind === "expense" && live && <Link className="report-link report-action report-cell-detail"
+                  href={getHref(transaction.id)} aria-label={`Alterar categoria de ${transaction.name}`}>
+                  Alterar categoria
+                </Link>}
+              </td>
               {showPaymentMethod && (
                 <td role="cell" className="report-transaction-payment">
                   {(paymentMethod && paymentMethodLabels[paymentMethod]) || "Não identificada"}

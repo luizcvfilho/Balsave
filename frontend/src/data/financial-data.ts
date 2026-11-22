@@ -9,11 +9,27 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
 export type ReportInvestment = ReportAccount & { asOf: string; includedInAccountId?: string };
 export type ReconciliationCandidate = { entryId: string; counterpartId: string | null };
 
+export type LocalCategory = { id: string; code: string | null; name: string; archived: boolean; archivedAt?: string | null };
+export type CategoryAccountOption = { id: string; label: string };
+export type CategoryRule = {
+  id: string;
+  categoryId: string;
+  description: string;
+  matchType: "exact" | "contains" | "starts_with" | "ends_with";
+  accountId: string | null;
+  priority: number;
+  startsOn: string | null;
+  enabled: boolean;
+};
+
 export type PlannedInstallment = {
   id: string;
   transactionId?: string;
   name: string;
   category: string;
+  categoryKey?: string;
+  categoryId?: string | null;
+  categoryTransactionId?: string;
   date: string;
   number: number;
   count: number;
@@ -29,6 +45,9 @@ export type ReportCard = CreditCard & {
 };
 
 export type FinancialData = {
+  categories?: LocalCategory[];
+  categoryRules?: CategoryRule[];
+  categoryCatalogStale?: boolean;
   asOf: string;
   accounts: ReportAccount[];
   investments?: ReportInvestment[];

@@ -80,7 +80,7 @@ Revisions live in `backend/migrations/versions/`. Run the following commands fro
 make migrate
 ```
 
-To run the refund integration tests, set `BALSAVE_TEST_DATABASE_URL` to the migration role's connection URL for a disposable PostgreSQL database migrated to `head`. Run the following command from the repository root.
+To run the refund and category integration tests, set `BALSAVE_TEST_DATABASE_URL` to the migration role's connection URL for a disposable PostgreSQL database migrated to `head`. Fixtures clean up their own records; tests explicitly check the application role's privileges. Run the following command from the repository root.
 
 ```sh
 (cd backend && uv run --locked python -m unittest discover -s tests -v)
@@ -131,6 +131,27 @@ Reconciliation compares structured transaction data. Candidates require differen
 Ledger colors use gray for reconciled internal movements, green for remaining credits and red for remaining debits. An individual account statement retains its actual debit or credit. The consolidated chart cancels paired transfers only when both positions are included. The calculation uses structured fields and saved decisions independently of transaction descriptions or bank-specific product names.
 
 Card limit usage requires a reported total and available limit. Open bill totals and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
+
+### Local categories and personal rules
+
+Open “Categorias” to create, rename, archive or reactivate your categories. In “Lançamentos” or “Gastos por categoria”, choose “Alterar categoria” on a purchase to save an individual choice. “Restaurar classificação automática” removes that choice and resumes personal rules or the provider classification. Manual choices apply to the selected posting; they do not automatically change other installments or create rules. Demo data remains read-only.
+
+The server resolves expense categories in this order: an individual manual choice, the first matching personal rule, then the Pluggy classification. Pluggy identifiers, original names and Portuguese translations remain separate from the effective local category. The public provider catalog is cached in PostgreSQL for one day. Refresh failures retain the previous catalog and use a five-minute retry delay. Unknown categories remain visible for review instead of being discarded. [Pluggy category catalog and hierarchy](https://docs.pluggy.ai/en/docs/products/transaction-categorization)
+
+Revisions `0005` and `0006` store the catalog, owner-scoped categories, manual transaction references, and personal rule criteria. They do not import the financial history into PostgreSQL. Composite category foreign keys prevent preferences from referencing another owner's categories; authenticated services also verify that transaction and account references belong to the current owner. Financial snapshots retain their short memory cache, while category preferences are re-read on each request so other workers' changes become visible. Categories can be managed without an available Pluggy connection.
+
+Category identifiers and default codes stay stable when names change; filters and charts use these identifiers. Renaming updates labels in past reports. Archiving rejects new manual choices and new rule targets, preserves existing manual choices, and retains automatic classifications for purchase dates through the archive day in `America/Sao_Paulo`. Late-arriving purchases dated before that cutoff follow the same policy. Installment estimates inherit the effective category of the latest observed installment used to generate them. Display categories never change the movement's financial nature, reconciliation, amount or balance impact.
+
+“Usar esta categoria em compras semelhantes” starts an explicit rule draft. Rules compare literal descriptions using equality, containment, prefix or suffix, ignoring case and repeated whitespace. They can apply to all accounts or one owned account/card, and to purchases from today or all available history. A lower priority number wins; creation time and ID break ties. “Revisar compras afetadas” shows actual category changes and the number of manual choices preserved. Saving requires a fingerprint of the reviewed criteria, preferences and available transactions; changed data requires another review. Partial financial data prevents rule previews. Editing or reactivating a rule requires another preview; disabling or removing it resumes the remaining rules or provider classification. Changing a dated rule's scope to “Compras a partir de hoje” resets its start date to the day of the edit.
+
+Run the regular frontend tests and authenticated category browser tests sequentially, since both start a Next.js development server:
+
+```sh
+npm --prefix frontend test
+npm --prefix frontend run test:categories
+```
+
+The category browser suite uses a disposable synthetic backend and a test-only session on separate local ports. It exercises desktop and iPhone-sized dark layouts without real Pluggy credentials. Backend integration tests exercise the actual authenticated routes and PostgreSQL constraints.
 
 ### Inspect a connection from the command line
 

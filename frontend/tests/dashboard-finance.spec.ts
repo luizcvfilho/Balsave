@@ -9,6 +9,7 @@ import {
   spendingPace,
   summarizeBalances,
   summarizeCards,
+  transactionCategoryKey,
 } from "../src/lib/finance";
 
 test("consolidates accounts by bank and totals card usage and limits separately", () => {
@@ -98,9 +99,9 @@ test("combines bank and card expenses by category and excludes transfers and fut
     totalCents: 69001,
     installmentCents: 0,
     categories: [
-      { name: "Alimentação", cents: 43001 },
-      { name: "Viagem", cents: 25000 },
-      { name: "Sem categoria", cents: 1000 },
+      { key: "food", name: "Alimentação", cents: 43001 },
+      { key: "travel", name: "Viagem", cents: 25000 },
+      { key: "uncategorized", name: "Sem categoria", cents: 1000 },
     ],
   });
   expect(categoryBreakdown(spending, "2026-11")).toEqual({
@@ -122,10 +123,27 @@ test("counts only installments dated in the selected month in its net installmen
   expect(categoryBreakdown(spending, "2026-10").installmentCents).toBe(3701);
   expect(categoryBreakdown(spending, "2026-11")).toEqual({
     month: "2026-11", totalCents: 6700, installmentCents: 1700,
-    categories: [{ name: "Compras", cents: 6700 }],
+    categories: [{ key: "shopping", name: "Compras", cents: 6700 }],
   });
   expect(categoryBreakdown(spending, "2026-12").installmentCents).toBe(0);
   expect(spendingPace(spending, "2026-10-31")[26].currentCents).toBe(3701);
+});
+
+test("keeps category identity on rename and preserves net spend and balances when reclassified", () => {
+  const original = {
+    id: "purchase", name: "Equipment", kind: "expense", category: "Compras", categoryKey: "shopping",
+    accountId: "account", date: "2026-11-10", amountCents: 10001,
+  } as const;
+  const renamed = { ...original, category: "Aquisições" };
+  expect(transactionCategoryKey(renamed)).toBe(transactionCategoryKey(original));
+  const refund = { id: "refund", name: "Refund", kind: "refund", expenseId: "purchase", date: "2026-11-12", amountCents: 3000 } as const;
+  const changed = { ...original, category: "Escritório", categoryKey: "custom:office" };
+  const before = categoryBreakdown(spendingByMonth([original, refund], "2026-11-20"), "2026-11");
+  const after = categoryBreakdown(spendingByMonth([changed, refund], "2026-11-20"), "2026-11");
+  expect(before.totalCents).toBe(7001);
+  expect(after.totalCents).toBe(before.totalCents);
+  expect(after.categories).toEqual([{ key: "custom:office", name: "Escritório", cents: 7001 }]);
+  expect(bankBalanceImpact(changed)).toBe(bankBalanceImpact(original));
 });
 
 test("compares the same calendar day across a year boundary and stops actuals at the reporting date", () => {

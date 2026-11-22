@@ -21,6 +21,7 @@ class InstallmentPlanningTests(TestCase):
         self.assertEqual([row["number"] for row in plans], list(range(2, 11)))
         self.assertEqual(plans[0], {
             "id": "purchase-1:2", "transactionId": "purchase-1", "name": "Store City",
+            "categoryTransactionId": "purchase-1",
             "category": "Compras", "date": "2026-11-16", "number": 2, "count": 10, "amountCents": 80901,
         })
         self.assertEqual(plans[1]["date"], "2026-12-16")
@@ -41,6 +42,7 @@ class InstallmentPlanningTests(TestCase):
         self.assertEqual(plans[0]["date"], "2027-01-17")
         self.assertEqual(plans[0]["amountCents"], 80899)
         self.assertEqual(plans[0]["transactionId"], "purchase-1")
+        self.assertEqual(plans[0]["categoryTransactionId"], "purchase-3")
 
     def test_handles_end_of_month_without_drifting_to_an_earlier_day(self):
         first = self.installment(1, "2027-01-31", purchase="2027-01-31")

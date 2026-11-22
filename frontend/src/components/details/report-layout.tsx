@@ -12,7 +12,7 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
   children: ReactNode;
   back?: { href: string; label: string };
 }) {
-  const { live, months, failedConnections, failedInvestments } = useFinancialReports();
+  const { live, months, failedConnections, failedInvestments, categoryCatalogStale } = useFinancialReports();
   const month = optionValue(dashboardMonth, months);
   const backLink = back ?? { href: reportHref("/", { mes: month }), label: "Voltar ao painel" };
 
@@ -27,6 +27,7 @@ export function ReportLayout({ title, dashboardMonth, children, back }: {
       </header>
       {failedConnections > 0 && <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>}
       {!!failedInvestments && <p className="report-muted" role="status">Alguns investimentos estão indisponíveis. O saldo consolidado pode estar incompleto.</p>}
+      {categoryCatalogStale && <p className="report-muted" role="status">Não foi possível atualizar o catálogo de categorias. Suas escolhas foram preservadas e as categorias disponíveis continuam em uso.</p>}
       {children}
     </Container>
   );

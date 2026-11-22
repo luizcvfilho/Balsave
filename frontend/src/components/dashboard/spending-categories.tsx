@@ -22,12 +22,12 @@ type Props = {
 };
 
 const categoryColors: ReadonlyMap<string, string> = new Map([
-  ["Moradia", "var(--category-housing)"],
-  ["Alimentação", "var(--category-food)"],
-  ["Transporte", "var(--category-transport)"],
-  ["Saúde", "var(--category-health)"],
-  ["Lazer", "var(--category-leisure)"],
-  ["Viagem", "var(--category-travel)"],
+  ["housing", "var(--category-housing)"],
+  ["food", "var(--category-food)"],
+  ["transport", "var(--category-transport)"],
+  ["health", "var(--category-health)"],
+  ["leisure", "var(--category-leisure)"],
+  ["travel", "var(--category-travel)"],
 ]);
 
 const subscribe = () => () => {};
@@ -80,11 +80,11 @@ export function SpendingCategories({ periods, asOf, month, onMonthChange, getHre
         {period && period.categories.length > 0 ? (
           // Keep the explicit list role for Safari when markers are visually hidden.
           <Box component="ul" role="list" sx={{ display: "grid", gap: 1.25, mt: 1.5, mb: 0, pl: 0, listStyle: "none" }}>
-            {period.categories.map(({ name, cents }) => {
+            {period.categories.map(({ key, name, cents }) => {
               const share = cents / period.totalCents;
               return (
-                <li key={name}>
-                  <Box component={Link} href={getHref(name)} className="report-link report-choice" sx={{ py: 0.5 }}>
+                <li key={key}>
+                  <Box component={Link} href={getHref(key)} className="report-link report-choice" sx={{ py: 0.5 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{name}</Typography>
                     <Typography variant="body2" sx={{ marginInlineStart: "auto", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                       {formatMoney(cents)}{" "}
@@ -99,7 +99,7 @@ export function SpendingCategories({ periods, asOf, month, onMonthChange, getHre
                     sx={{
                       mt: 0.5,
                       "& .MuiLinearProgress-bar": {
-                        bgcolor: categoryColors.get(name) ?? "var(--category-other)",
+                        bgcolor: categoryColors.get(key) ?? "var(--category-other)",
                       },
                     }}
                   />

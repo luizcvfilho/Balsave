@@ -186,6 +186,28 @@ def accounts(item_id: UUID, api_key: str) -> list[dict[str, Any]]:
     return results(request("/accounts?" + urlencode({"itemId": item_id}), api_key=api_key))
 
 
+def categories(api_key: str) -> list[dict[str, Any]]:
+    """Fetch the complete documented catalog, never silently accept a partial one."""
+    data = request("/categories", api_key=api_key)
+    if type(data.get("page")) is not int or data["page"] != 1 or type(data.get("totalPages")) is not int or data["totalPages"] not in (0, 1):
+        raise PluggyError("Pluggy returned an incomplete category catalog.")
+    records = results(data)
+    if type(data.get("total")) is not int or data["total"] != len(records):
+        raise PluggyError("Pluggy returned an incomplete category catalog.")
+    if any(not isinstance(record.get("id"), str) or not record["id"].strip() for record in records):
+        raise PluggyError("Pluggy returned a category without an ID.")
+    if any(not isinstance(record.get("description"), str) or not record["description"].strip() for record in records):
+        raise PluggyError("Pluggy returned a category without a description.")
+    for record in records:
+        for field in ("id", "description", "descriptionTranslated", "parentId", "parentDescription"):
+            value = record.get(field)
+            if value is not None and (not isinstance(value, str) or len(value) > 200):
+                raise PluggyError("Pluggy returned an invalid category field.")
+    if len({record["id"] for record in records}) != len(records):
+        raise PluggyError("Pluggy returned duplicate category IDs.")
+    return records
+
+
 def investment_pages(path: str, api_key: str, **filters: str) -> Iterator[dict[str, Any]]:
     page = 1
     while True:

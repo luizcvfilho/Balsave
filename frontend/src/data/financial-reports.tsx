@@ -2,8 +2,8 @@
 
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import {
-  bankTransfersAfterMonth, daysInMonth, expensesWithRefunds, previousMonths, spendingByMonth, spendingPace, summarizeBalances,
-  type Transaction, transactionCategory,
+  bankTransfersAfterMonth, categoryKeyForLabel, daysInMonth, expensesWithRefunds, previousMonths, spendingByMonth, spendingPace, summarizeBalances,
+  type Transaction, transactionCategory, transactionCategoryKey,
 } from "../lib/finance";
 import { formatDate, formatMoney, formatMonth, formatMonthName, formatShortMonth } from "../lib/format";
 import { cardLabel, type FinancialData } from "./financial-data";
@@ -29,8 +29,11 @@ function buildReports(data: FinancialData, live: boolean) {
   const spending = spendingByMonth(reportedTransactions, asOf);
   const expenses = expensesWithRefunds(reportedTransactions, asOf);
   const trackedRefunds = expenses.filter(({ expense, refunds }) => expense.expectsRefund || refunds.length > 0);
-  const expenseCategories = [...new Set(expenses.map(({ expense }) => transactionCategory(expense)))]
-    .sort((first, second) => first.localeCompare(second, "pt-BR"));
+  const expenseCategories = [...new Map([
+    ...expenses.map(({ expense }) => [transactionCategoryKey(expense), transactionCategory(expense)] as const),
+    ...plannedInstallments.map(plan => [plan.categoryKey ?? categoryKeyForLabel(plan.category), plan.category] as const),
+  ]).entries()].map(([value, label]) => ({ value, label }))
+    .sort((first, second) => first.label.localeCompare(second.label, "pt-BR"));
   const sources = new Map(accounts.map(account => [account.id, `${account.bank} · ${account.name}`]));
   for (const card of cards) {
     sources.set(card.id, cardLabel(card));

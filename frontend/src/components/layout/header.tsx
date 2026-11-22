@@ -24,6 +24,7 @@ export function Header({ signedIn }: { signedIn: boolean }) {
             </picture>
           </Link>
           <div className="report-filters">
+            <Link href="/categorias" className="report-link report-action">Categorias</Link>
             <Link href="/conexoes" className="report-link report-action">Conectar bancos</Link>
             {signedIn && (
               <form action={signOut}>

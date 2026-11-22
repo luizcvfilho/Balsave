@@ -1,7 +1,7 @@
 import psycopg
 from fastapi import FastAPI, HTTPException
 
-from app import database, pluggy_preview
+from app import category_api, category_rule_api, database, pluggy_preview
 
 app = FastAPI(
     title="Balsave API",
@@ -10,6 +10,8 @@ app = FastAPI(
     redoc_url=None,
 )
 app.include_router(pluggy_preview.router)
+app.include_router(category_api.router)
+app.include_router(category_rule_api.router)
 
 
 @app.get("/api/health", include_in_schema=False)

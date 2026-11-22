@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
+import { CategoryEditor } from "../../components/details/category-editor";
 import { ReceiptEditor, useReceiptAnnotations } from "../../components/details/receipt-annotations";
 import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
@@ -12,7 +13,7 @@ import { useReportQuery } from "../../components/details/report-query";
 import { kindOptions, orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
-import { bankBalanceImpact, isIncoming, type Transaction, transactionCategory, transactionKindLabels } from "../../lib/finance";
+import { bankBalanceImpact, isIncoming, type Transaction, transactionCategory, transactionCategoryKey, transactionKindLabels } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
 import { optionValue } from "../../lib/report-links";
 
@@ -78,7 +79,7 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
     const annotation = annotations[transaction.id];
     return period.includes(transaction.date)
       && (!type || transaction.kind === type)
-      && (!category || transactionCategory(transaction) === category)
+      && (!category || transactionCategoryKey(transaction) === category)
       && matchesSearch(search, transaction.name, annotation?.classification, ...(annotation?.tags ?? []));
   });
   const rows = orderedTransactions(matches.map(transaction => {
@@ -199,6 +200,7 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
           ...(source ? [{ label: "Conta ou cartão", value: source }] : []),
         ]} />
       </SectionCard>
+      {transaction.kind === "expense" && <CategoryEditor transaction={transaction} />}
       {group && (
         <SectionCard id="vinculo-reembolso" title="Acompanhamento do reembolso" description={refundLabels[group.status]}>
           {transaction.kind === "refund" && (

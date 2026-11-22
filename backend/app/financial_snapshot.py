@@ -8,28 +8,12 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app import pluggy
+from app.categorization import resolve_provider_category
 from app.installment_planning import ObservedInstallment, planned_installments
 from app.reconciliation import reconcile
 
 REPORT_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 MAX_CENTS = 10**14
-
-CATEGORIES = {
-    "accommodation": "Viagem",
-    "cinema, theater and concerts": "Lazer",
-    "food delivery": "Alimentação",
-    "eating out": "Alimentação",
-    "gas stations": "Transporte",
-    "groceries": "Alimentação",
-    "healthcare": "Saúde",
-    "housing": "Moradia",
-    "pharmacy": "Saúde",
-    "rent": "Moradia",
-    "shopping": "Compras",
-    "taxi and ride-hailing": "Transporte",
-    "transportation": "Transporte",
-    "travel": "Viagem",
-}
 
 INVESTMENT_CATEGORIES = {
     "investments", "automatic investment", "fixed income", "mutual funds",
@@ -242,6 +226,7 @@ def card_installment(metadata: dict[str, Any]) -> dict[str, int] | None:
 
 def normalize_transaction(
     raw: dict[str, Any], account_id: str, as_of: str, card: bool, owner_document: str | None = None,
+    *, catalog: dict[str, dict] | None = None,
 ) -> dict | None:
     status = raw.get("status")
     if status != "POSTED" and not (card and status == "PENDING"):
@@ -292,6 +277,8 @@ def normalize_transaction(
         "cardId" if card else "accountId": account_id,
         "kind": kind,
     }
+    classification = resolve_provider_category(raw, catalog)
+    entry.update({key: value for key, value in classification.items() if key.startswith("providerCategory")})
     if kind == "transfer":
         entry["direction"] = "in" if direction == "CREDIT" else "out"
         if fund_transfer:
@@ -299,9 +286,7 @@ def normalize_transaction(
         elif own_transfer:
             entry["internalTransfer"] = "account"
     if kind == "expense":
-        category = CATEGORIES.get(label(raw.get("category")).casefold())
-        if category:
-            entry["category"] = category
+        entry.update(classification)
         method = expense_payment_method(raw, card)
         if method:
             entry["paymentMethod"] = method
@@ -369,6 +354,7 @@ def card_sync_date(item: dict, as_of: str) -> date | None:
 
 def load_item(
     item_id: UUID, api_key: str, as_of: str, fallback_bank: str, bank_names: dict[str, str],
+    *, catalog: dict[str, dict] | None = None,
 ) -> tuple[list[dict], list[dict], list[dict], dict[str, dict[str, int]], dict[str, str]]:
     item = pluggy.meu_pluggy_item(item_id, api_key)
     synced_through = card_sync_date(item, as_of)
@@ -412,7 +398,7 @@ def load_item(
         installments: dict[str, ObservedInstallment] = {}
         usable_statement = True
         for transaction in pluggy.transactions(account_id, api_key):
-            entry = normalize_transaction(transaction, account_id, as_of, card, owner_document)
+            entry = normalize_transaction(transaction, account_id, as_of, card, owner_document, catalog=catalog)
             if entry is not None:
                 account_entries[entry["id"]] = entry
                 if installment := entry.get("installment"):
@@ -548,6 +534,7 @@ def load_snapshot(
     item_ids: tuple[UUID, ...], api_key: str,
     *, decisions: dict[str, dict] | None = None, position_links: dict[str, str | None] | None = None,
     include_evidence: bool = False,
+    catalog: dict[str, dict] | None = None,
 ) -> dict:
     as_of = datetime.now(REPORT_TIMEZONE).date().isoformat()
     bank_names = institution_names(api_key)
@@ -558,7 +545,7 @@ def load_snapshot(
         bank = f"Meu Pluggy · conexão {index}"
         try:
             item_accounts, item_cards, item_entries, _, _ = load_item(
-                item_id, api_key, as_of, bank, bank_names,
+                item_id, api_key, as_of, bank, bank_names, catalog=catalog,
             )
         except pluggy.PluggyError:
             failed += 1

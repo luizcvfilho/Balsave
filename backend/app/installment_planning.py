@@ -75,6 +75,7 @@ def planned_installments(
             plans.append({
                 "id": f"{source.transaction_id}:{number}",
                 "transactionId": source.transaction_id,
+                "categoryTransactionId": latest.transaction_id,
                 "name": purchase_name(latest),
                 "category": latest.category,
                 "date": month_after(latest.posted_on, number - latest.number, day).isoformat(),

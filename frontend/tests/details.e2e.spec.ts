@@ -10,7 +10,7 @@ test("opens the month and category from the dashboard and keeps the month on ret
 
   await expect(page.getByRole("heading", { name: "Gastos por categoria", exact: true })).toBeVisible();
   await expect(page.getByLabel("Período", { exact: true })).toHaveValue("2026-10");
-  await expect(page.getByLabel("Categoria", { exact: true })).toHaveValue("Alimentação");
+  await expect(page.getByLabel("Categoria", { exact: true })).toHaveValue("food");
   const purchases = page.getByRole("table", { name: "Compras por categoria" });
   await expect(purchases.getByRole("columnheader", { name: "Forma de pagamento" })).toBeVisible();
   await expect(purchases.getByRole("link", { name: "Supermercado" })).toHaveCount(2);
@@ -87,7 +87,7 @@ test("shows upcoming installment estimates without adding them to recorded spend
   await expect(actuals.getByText(/R\$\s*0,00/)).toBeVisible();
   await expect(projections.getByText(/3\/6 · 13\/12\/2026 · Compras/)).toBeVisible();
   await expect(projections.getByRole("link", { name: "Notebook" })).toHaveAttribute("href", /lancamento=notebook-1/);
-  await page.getByLabel("Categoria", { exact: true }).selectOption("Compras");
+  await page.getByLabel("Categoria", { exact: true }).selectOption("shopping");
   await expect(projections.getByText("Cadeira ergonômica")).toHaveCount(0);
   await page.getByLabel("Período", { exact: true }).selectOption("2027-01");
   await expect(projections.getByText(/4\/6 · 13\/01\/2027/)).toBeVisible();

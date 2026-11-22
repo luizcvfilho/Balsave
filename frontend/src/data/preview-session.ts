@@ -34,13 +34,13 @@ export async function hasPreviewSession() {
   return !!match && Number(match[1]) > Date.now() / 1000 && secureEqual(match[2], signature(match[1]));
 }
 
-export async function previewRequest(path: "snapshot" | "token" | "connections" | "reconciliation" | "position-links", payload?: object) {
+export async function previewRequest(path: "snapshot" | "token" | "connections" | "reconciliation" | "position-links" | "categories" | "category-create" | "category-update" | "transaction-category" | "category-rule-preview" | "category-rule-save" | "category-rule-update", payload?: object) {
   if (!await hasPreviewSession()) return;
   const bearer = createHmac("sha256", previewPassword()).update("balsave/preview/backend").digest("hex");
   const origin = process.env.BALSAVE_BACKEND_URL ?? "http://127.0.0.1:8000";
   try {
     return await fetch(`${origin}/_internal/pluggy/${path}`, {
-      method: path === "snapshot" ? "GET" : "POST",
+      method: path === "snapshot" || path === "categories" ? "GET" : "POST",
       headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
       body: payload && JSON.stringify(payload),
       cache: "no-store",

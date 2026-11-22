@@ -43,6 +43,14 @@ export type Transaction = {
     kind: "expense";
     merchantType?: string;
     category?: string;
+    categoryId?: string | null;
+    categoryKey?: string;
+    categorySource?: "manual" | "rule" | "pluggy" | "unclassified";
+    categoryRuleId?: string;
+    categoryNeedsReview?: boolean;
+    providerCategoryId?: string | null;
+    providerCategoryName?: string | null;
+    providerCategoryLabel?: string | null;
     expectsRefund?: boolean;
     installment?: { number?: number; count?: number };
   }
@@ -114,6 +122,26 @@ export function transactionCategory(transaction: Transaction) {
   }
 }
 
+const defaultCategoryKeys: ReadonlyMap<string, string> = new Map([
+  ["Alimentação", "food"], ["Moradia", "housing"], ["Transporte", "transport"], ["Saúde", "health"],
+  ["Lazer", "leisure"], ["Viagem", "travel"], ["Compras", "shopping"], ["Educação", "education"],
+  ["Serviços", "services"], ["Serviços digitais", "subscriptions"], ["Seguros", "insurance"],
+  ["Impostos", "taxes"], ["Tarifas bancárias", "fees"], ["Doações", "donations"], ["Apostas", "gambling"],
+  ["Sem categoria", "uncategorized"],
+]);
+
+export function transactionCategoryKey(transaction: Transaction): string {
+  if (transaction.kind === "expense") {
+    return transaction.categoryKey ?? categoryKeyForLabel(transactionCategory(transaction));
+  }
+  if (transaction.kind === "transfer") return transaction.internalTransfer || transaction.balanceImpactCents === 0 ? "kind:internal-transfer" : "kind:transfer";
+  return `kind:${transaction.kind}`;
+}
+
+export function categoryKeyForLabel(label: string): string {
+  return defaultCategoryKeys.get(label) ?? `legacy:${label}`;
+}
+
 export function summarizeBalances(accounts: readonly AccountBalance[]) {
   const banks = new Map<string, number>();
   let totalCents = 0;
@@ -172,7 +200,7 @@ export function expensesWithRefunds(transactions: readonly Transaction[], asOf: 
 }
 
 export function spendingByMonth(transactions: readonly Transaction[], asOf: string) {
-  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number>; installmentCents: number }>();
+  const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number>; categoryLabels: Map<string, string>; installmentCents: number }>();
   for (const { expense, netCents } of expensesWithRefunds(transactions, asOf)) {
     if (netCents === 0) continue;
 
@@ -180,12 +208,13 @@ export function spendingByMonth(transactions: readonly Transaction[], asOf: stri
     const day = Number(expense.date.slice(8));
     let period = months.get(month);
     if (!period) {
-      period = { dailyCents: Array<number>(daysInMonth(month)).fill(0), categoryCents: new Map(), installmentCents: 0 };
+      period = { dailyCents: Array<number>(daysInMonth(month)).fill(0), categoryCents: new Map(), categoryLabels: new Map(), installmentCents: 0 };
       months.set(month, period);
     }
 
     period.dailyCents[day - 1] += netCents;
-    const category = transactionCategory(expense);
+    const category = transactionCategoryKey(expense);
+    period.categoryLabels.set(category, transactionCategory(expense));
     period.categoryCents.set(category, (period.categoryCents.get(category) ?? 0) + netCents);
     if (expense.installment) period.installmentCents += netCents;
   }
@@ -196,7 +225,7 @@ export function spendingByMonth(transactions: readonly Transaction[], asOf: stri
 export function categoryBreakdown(spending: ReturnType<typeof spendingByMonth>, month: string) {
   const period = spending.get(month);
   const entries = period?.categoryCents ?? [];
-  const categories = Array.from(entries, ([name, cents]) => ({ name, cents }))
+  const categories = Array.from(entries, ([key, cents]) => ({ key, name: period?.categoryLabels.get(key) ?? "Sem categoria", cents }))
     .sort((first, second) => second.cents - first.cents);
   return {
     month, categories, installmentCents: period?.installmentCents ?? 0,

@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app import database, pluggy
+from app import category_catalog, category_rule_store, category_store, database, pluggy
+from app.category_resolution import apply_categories
 from app.financial_snapshot import load_snapshot
 
 
@@ -31,7 +32,7 @@ router = APIRouter(
 )
 
 snapshot_lock = Lock()
-cached_snapshot: tuple[tuple[UUID, ...], float, dict] | None = None
+cached_snapshot: tuple[tuple[UUID, tuple[UUID, ...]], float, dict] | None = None
 
 
 class Connection(BaseModel):
@@ -68,7 +69,34 @@ def load_owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dic
     links = {str(row[0]): str(row[1]) if row[1] else None for row in connection.execute(
         "SELECT investment_id, account_id FROM balsave.investment_account_links WHERE user_id = %s", (owner,),
     ).fetchall()}
-    return load_snapshot(items, api_key(), decisions=decisions, position_links=links, include_evidence=True)
+    key = api_key()
+    catalog, stale = category_catalog.load_catalog(connection, key)
+    data = load_snapshot(items, key, decisions=decisions, position_links=links, include_evidence=True, catalog=catalog)
+    data["categoryCatalogStale"] = stale
+    return apply_owner_categories(connection, owner, data)
+
+
+def apply_owner_categories(connection, owner: UUID, data: dict) -> dict:
+    # Re-read preferences even for cached financial data so changes made by
+    # another backend worker become visible without another provider fetch.
+    categories = category_store.ensure_default_categories(connection, owner)
+    rules = category_rule_store.list_rules(connection, owner)
+    apply_categories(data, categories, category_store.assignments(connection, owner), rules)
+    data["categories"] = categories
+    data["categoryRules"] = rules
+    return data
+
+
+def owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dict:
+    """Read owned financial facts; callers hold snapshot_lock while using them."""
+    global cached_snapshot
+    now = monotonic()
+    if cached_snapshot and cached_snapshot[0] == (owner, items) and now < cached_snapshot[1]:
+        return apply_owner_categories(connection, owner, cached_snapshot[2])
+    data = load_owner_snapshot(owner, items, connection)
+    if not data["failedConnections"] and not data["failedInvestments"]:
+        cached_snapshot = ((owner, items), monotonic() + 300, data)
+    return data
 
 
 def owner_and_items() -> tuple[UUID, tuple[UUID, ...]]:
@@ -130,21 +158,13 @@ def save_connection(payload: Connection) -> JSONResponse:
 
 @router.get("/snapshot")
 def snapshot() -> JSONResponse:
-    global cached_snapshot
-
     try:
         owner, items = owner_and_items()
         if not items:
             return response({"connected": False})
         with snapshot_lock:
-            now = monotonic()
-            if cached_snapshot and cached_snapshot[0] == items and now < cached_snapshot[1]:
-                data = cached_snapshot[2]
-            else:
-                with database.connect() as connection:
-                    data = load_owner_snapshot(owner, items, connection)
-                if not data["failedConnections"] and not data["failedInvestments"]:
-                    cached_snapshot = (items, monotonic() + 300, data)
+            with database.connect() as connection:
+                data = owner_snapshot(owner, items, connection)
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not load financial data") from None
     return response({"connected": True, "data": public_snapshot(data)})

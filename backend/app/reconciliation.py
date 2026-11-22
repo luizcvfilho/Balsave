@@ -10,6 +10,11 @@ def position_id(entry: dict) -> str | None:
     return entry.get("accountId") or entry.get("investmentId")
 
 
+def clear_expense_classification(entry: dict) -> None:
+    for field in ("category", "categoryId", "categoryKey", "categorySource", "categoryNeedsReview", "categoryRuleId", "_automaticCategory", "paymentMethod"):
+        entry.pop(field, None)
+
+
 def fingerprint(entry: dict) -> str:
     values = [entry["id"], entry["date"], entry["amountCents"], position_id(entry), entry.get("balanceImpactCents"), entry.get("_evidence")]
     return sha256(json.dumps(values, separators=(",", ":")).encode()).hexdigest()
@@ -65,8 +70,7 @@ def reconcile(entries: list[dict], positions: list[dict], decisions: dict[str, d
         combined_impact = first["balanceImpactCents"] + second["balanceImpactCents"]
         for current, other in ((first, second), (second, first)):
             current["kind"] = "transfer"
-            current.pop("category", None)
-            current.pop("paymentMethod", None)
+            clear_expense_classification(current)
             current["direction"] = "in" if current["balanceImpactCents"] > 0 else "out"
             current["internalTransfer"] = "investment" if first.get("investmentId") or second.get("investmentId") else "account"
             current["reconciliation"] = method
@@ -93,6 +97,7 @@ def reconcile(entries: list[dict], positions: list[dict], decisions: dict[str, d
             if entry.get("accountId") and entry["_evidence"]["fundOperation"]:
                 entry.update(kind="transfer", direction="in" if entry["balanceImpactCents"] > 0 else "out",
                              internalTransfer="investment", balanceImpactCents=0, reconciliation="confirmed")
+                clear_expense_classification(entry)
                 occupied.add(entry["id"])
             continue
         other = by_id.get(other_id)
