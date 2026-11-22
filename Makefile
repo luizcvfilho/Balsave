@@ -27,8 +27,9 @@ env: .env
 		app_password=$$(openssl rand -hex 24); \
 		printf 'POSTGRES_PASSWORD=%s\nBALSAVE_DB_PASSWORD=%s\n' "$$admin_password" "$$app_password" > "$@"
 
+# Recreate containers to refresh bind mounts after Docker Desktop or WSL restarts.
 dev: .env
-	$(COMPOSE_DEV) up --build
+	$(COMPOSE_DEV) up --build --force-recreate
 
 up: .env
 	$(COMPOSE) up --build --wait

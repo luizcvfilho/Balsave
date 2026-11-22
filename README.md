@@ -10,7 +10,7 @@ Use Make, Docker with the Compose v2 plugin, and `openssl`. On the first run, th
 make dev
 ```
 
-`make dev` combines `compose.yaml` and `compose.dev.yaml` to enable automatic reloading for the frontend and API. Open the dashboard at <http://localhost:8080>. The API is available at `/api`, with documentation at `/api/docs`.
+`make dev` combines `compose.yaml` and `compose.dev.yaml` to enable automatic reloading for the frontend and API. It recreates the containers on each start to refresh their bind mounts and reuses the PostgreSQL volume. Open the dashboard at <http://localhost:8080>. The API is available at `/api`, with documentation at `/api/docs`. The Next.js startup logs show port `3000`, which the frontend uses inside Docker. Run `make ps` to see the published port for the `proxy` service.
 
 | Command | Purpose |
 | --- | --- |
