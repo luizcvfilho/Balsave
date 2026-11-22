@@ -110,21 +110,23 @@ const historicalPurchases = Object.entries(purchasesByMonth).flatMap(([month, pu
   })),
 );
 
+const eventTags = ["Mostra de cinema"];
+
 export const mockTransactions: Transaction[] = [
   ...historicalPurchases,
   { id: "booking", date: "2026-09-20", kind: "expense", name: "Reserva cancelada", merchantType: "hotel", amountCents: 45900, accountId: "inter-conta" },
   { id: "booking-refund", date: "2026-09-23", kind: "refund", name: "Reembolso da reserva", expenseId: "booking", amountCents: 45900, accountId: "inter-conta" },
   { id: "notebook-1", date: "2026-10-26", kind: "expense", name: "Notebook", category: "Compras", amountCents: 42000, cardId: "itau-4821", installment: { number: 1, count: 6 } },
   { id: "course-6", date: "2026-10-27", kind: "expense", name: "Curso", category: "Educação", amountCents: 8500, cardId: "itau-4821", installment: { number: 6, count: 6 } },
+  { id: "hotel", date: "2026-10-30", kind: "expense", name: "Hotel", merchantType: "hotel", amountCents: 80000, cardId: "itau-4821", expectsRefund: true },
   { id: "market", date: "2026-11-02", kind: "expense", name: "Supermercado", merchantType: "groceries", amountCents: 18420, accountId: "nubank-conta" },
   { id: "salary", date: "2026-11-05", kind: "income", name: "Salário", amountCents: 685000, accountId: "itau-corrente" },
   { id: "rent", date: "2026-11-06", kind: "expense", name: "Aluguel", merchantType: "rent", amountCents: 95000, accountId: "itau-corrente", paymentMethod: "pix" },
-  { id: "restaurant", date: "2026-11-07", kind: "expense", name: "Restaurante", merchantType: "restaurant", amountCents: 12580, cardId: "nubank-7032" },
-  { id: "cinema", date: "2026-11-08", kind: "expense", name: "Cinema", merchantType: "cinema", amountCents: 7200, cardId: "nubank-7032" },
-  { id: "hotel", date: "2026-11-09", kind: "expense", name: "Hotel", merchantType: "hotel", amountCents: 80000, cardId: "itau-4821" },
+  { id: "restaurant", date: "2026-11-07", kind: "expense", name: "Restaurante", merchantType: "restaurant", amountCents: 12580, cardId: "nubank-7032", tags: eventTags },
+  { id: "cinema", date: "2026-11-08", kind: "expense", name: "Cinema", merchantType: "cinema", amountCents: 7200, cardId: "nubank-7032", tags: eventTags },
   { id: "fuel", date: "2026-11-10", kind: "expense", name: "Posto", merchantType: "fuel", amountCents: 23000, accountId: "inter-conta" },
   { id: "hotel-refund", date: "2026-11-11", kind: "refund", name: "Reembolso do hotel", expenseId: "hotel", amountCents: 50000, accountId: "itau-corrente" },
-  { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850, accountId: "nubank-conta" },
+  { id: "ride", date: "2026-11-12", kind: "expense", name: "Transporte por aplicativo", merchantType: "ride", amountCents: 3850, accountId: "nubank-conta", tags: eventTags },
   { id: "card-payment", date: "2026-11-13", kind: "transfer", name: "Pagamento de fatura", amountCents: 160000, accountId: "itau-corrente" },
   { id: "notebook-2", date: "2026-11-13", kind: "expense", name: "Notebook", category: "Compras", amountCents: 42000, cardId: "itau-4821", installment: { number: 2, count: 6 } },
   { id: "unclassified", date: "2026-11-14", kind: "expense", name: "Compra no débito", amountCents: 9500, accountId: "nubank-conta", paymentMethod: "debit_card" },

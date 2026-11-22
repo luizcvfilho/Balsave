@@ -49,7 +49,7 @@ test("uses the selected pace day for daily purchases and the net category breakd
 test("includes only the installments dated in the selected calendar month", async ({ page }) => {
   await page.goto("/");
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
-  await expect(categories.getByText(/R\$\s*2\.415,50/)).toBeVisible();
+  await expect(categories.getByText(/R\$\s*2\.115,50/)).toBeVisible();
   await expect(categories.getByRole("link", { name: /^Compras/ })).toContainText(/R\$\s*420,00/);
   const installments = categories.getByRole("link", { name: /^Parcelas incluídas/ });
   await expect(installments).toContainText(/R\$\s*420,00/);
@@ -131,6 +131,36 @@ test("opens the selected card with its invoice, due date, and future installment
   await expect(invoice.getByRole("link", { name: "Hotel", exact: true })).toHaveCount(0);
 });
 
+test("finds the demo event across three categories in the ledger", async ({ page }) => {
+  await page.goto("/lancamentos");
+  await page.getByLabel("Buscar lançamentos").fill("Mostra de cinema");
+  const ledger = page.getByRole("table", { name: "Lançamentos filtrados" });
+  await expect(ledger.getByRole("link")).toHaveCount(3);
+  for (const category of ["Alimentação", "Lazer", "Transporte"]) {
+    await expect(ledger.getByRole("cell", { name: category, exact: true })).toBeVisible();
+  }
+  await page.getByLabel("Categoria", { exact: true }).selectOption("leisure");
+  await expect(ledger.getByRole("link")).toHaveCount(1);
+  await ledger.getByRole("link", { name: "Cinema", exact: true }).click();
+  await expect(page.getByText("Mostra de cinema", { exact: true })).toBeVisible();
+});
+
+test("reports the hotel net expense in the purchase month and the credit in the receipt month", async ({ page }) => {
+  await page.goto("/gastos?mes=2026-10&categoria=travel");
+  const hotel = page.getByRole("row").filter({ has: page.locator('a[href*="lancamento=hotel"]') });
+  await expect(hotel.getByText("30/10/2026")).toBeVisible();
+  await expect(hotel.getByText(/^R\$\s*300,00$/)).toBeVisible();
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-11");
+  await expect(hotel).toHaveCount(0);
+
+  await page.goto("/lancamentos?mes=2026-10");
+  await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-11");
+  const credit = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Reembolso do hotel", exact: true }) });
+  await expect(credit.getByText("11/11/2026")).toBeVisible();
+  await expect(credit.getByText(/\+R\$\s*500,00/)).toBeVisible();
+});
+
 test.describe("mobile detail flows", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: "dark" });
 
@@ -158,8 +188,9 @@ test.describe("mobile detail flows", () => {
     await page.getByLabel("Status").selectOption("completed");
     await expect(page.getByRole("link", { name: "Reserva cancelada" })).toBeVisible();
     await page.getByLabel("Status").selectOption("partial");
+    await expect(page.getByText("Compra em 30 de outubro de 2026")).toBeVisible();
     await expect(page.getByText(/R\$\s*300,00/)).toBeVisible();
-    await page.getByRole("link", { name: /Reembolso do hotel/ }).tap();
+    await page.getByRole("link", { name: "Reembolso do hotel · 11 de novembro de 2026" }).tap();
     await expect(page.getByRole("link", { name: /Compra original.*Hotel/ })).toBeVisible();
     await page.getByLabel("Classificação", { exact: true }).fill("Viagem a trabalho");
     await page.getByLabel("Tags", { exact: true }).fill("hotel, empresa");

@@ -28,6 +28,7 @@ export type Transaction = {
   date: string;
   name: string;
   amountCents: number;
+  tags?: readonly string[];
   accountId?: string;
   cardId?: string;
   investmentId?: string;

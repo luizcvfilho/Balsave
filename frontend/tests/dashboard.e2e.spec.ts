@@ -36,7 +36,7 @@ test("keeps category colors stable and communicates spending and transaction dir
   await expect(chart.locator("path.chart-above")).toHaveCSS("stroke", "rgb(166, 79, 56)");
   await expect(chart.locator("path.chart-below")).toHaveCSS("stroke", "rgb(40, 101, 145)");
   const slider = chart.getByRole("slider");
-  await expect(slider).toHaveAttribute("aria-valuetext", /293,83 acima da média/);
+  await expect(slider).toHaveAttribute("aria-valuetext", /6,17 abaixo da média/);
   await slider.press("Home");
   await slider.press("ArrowRight");
   await expect(chart.getByText(/4,53 acima da média/)).toBeVisible();
@@ -46,7 +46,6 @@ test("keeps category colors stable and communicates spending and transaction dir
   await expect(transactions.getByText(/\+R\$\s*500,00/)).toHaveCSS("color", "rgb(40, 113, 79)");
   await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
   await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
-  await expect(transactions.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
 });
 
 test.describe("mobile layout", () => {

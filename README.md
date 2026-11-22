@@ -4,13 +4,22 @@ A personal finance web application in Brazilian Portuguese (pt-BR) that uses Bra
 
 ## Run locally
 
-Use Make, Docker with the Compose v2 plugin, and `openssl`. On the first run, the Makefile generates a local `.env` with separate passwords for the PostgreSQL administrator and the API.
+Use Make, a running Docker engine with the Compose v2 plugin, and `openssl`. From a clean checkout, run the following commands to generate a local `.env`, build and start the stack, and check database readiness through Caddy. Compose applies the migrations automatically.
+
+```sh
+make up
+make health
+```
+
+Open <http://localhost:8080>. The generated `.env` contains separate passwords for the PostgreSQL administrator and the API. The demo runs with those two passwords alone.
+
+For development with automatic reloading, use the following command from a stopped stack.
 
 ```sh
 make dev
 ```
 
-`make dev` combines `compose.yaml` and `compose.dev.yaml` to enable automatic reloading for the frontend and API. It recreates the containers on each start to refresh their bind mounts and reuses the PostgreSQL volume. Open the dashboard at <http://localhost:8080>. The API is available at `/api`, with documentation at `/api/docs`. The Next.js startup logs show port `3000`, which the frontend uses inside Docker. Run `make ps` to see the published port for the `proxy` service.
+`make dev` combines `compose.yaml` and `compose.dev.yaml`. It recreates the containers on each start to refresh their bind mounts and reuses the PostgreSQL volume. The API documentation is available at `/api/docs`. The Next.js startup logs show port `3000`, which the frontend uses inside Docker. Run `make ps` to see the host port published by the `proxy` service. PostgreSQL keeps its data in the named volume across `make down` and `make up`. See the [architecture notes](docs/architecture.md) for service boundaries and storage decisions.
 
 | Command | Purpose |
 | --- | --- |
@@ -38,7 +47,17 @@ npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
-The dashboard uses a reproducible snapshot in [`frontend/src/data/mock-data.ts`](frontend/src/data/mock-data.ts). Edit that file to change the bank accounts, card limits, monthly balances, or transactions. Mock amounts use integer cents, and the reporting date is a calendar date in `America/Sao_Paulo`.
+## Reproduce the demo
+
+Leave `BALSAVE_PREVIEW_PASSWORD` and the Pluggy credentials unset to start in demo mode. The fixture in [`frontend/src/data/mock-data.ts`](frontend/src/data/mock-data.ts) uses synthetic account balances, card limits and endings, and categorized transactions. The reporting date is fixed at November 14, 2026, in `America/Sao_Paulo`. Transaction history begins in June 2026, so the first run already has previous months for comparison. Edit the fixture to change the examples.
+
+From the dashboard, select “Ver detalhes” in “Lançamentos recentes” to open “Lançamentos”.
+
+| Scenario | Where to find it |
+| --- | --- |
+| Everyday expenses | Open “Lançamentos” and select November 2026 in “Período”. The ledger includes groceries, rent, and fuel alongside bank and credit card entries. |
+| Event spanning categories | In the same period, enter `Mostra de cinema` in “Buscar lançamentos”. The three results use “Alimentação”, “Lazer”, and “Transporte”. The event tag appears in the ledger and in each transaction's details. |
+| Partial refund in a later month | Open “Lançamentos” → “Reembolsos” and select “Parciais” in “Status”. “Hotel” shows the R$ 800,00 purchase on October 30, the R$ 500,00 credit on November 11, and the R$ 300,00 still pending. The credit appears in the November account statement, and the net expense remains in October. |
 
 “Ritmo de gastos” and “Gastos por categoria” share the same net expense calculation. Expenses are categorized from their merchant type, and linked refunds reduce the original expense as of the reporting date. The daily comparison uses the previous three calendar months. For shorter months, it carries their closing total forward to the remaining days. The balance chart shows the last calendar day of each completed month. “Saldo em contas” displays the current balance.
 
@@ -66,7 +85,7 @@ Open the [interactive database diagram](docs/database/schema.html) locally.
 | `transactions` | Dated entries with an exact amount, currency, direction, status and kind. |
 | `refunds` | Links a posted refund credit to one original expense, which can receive multiple partial refunds. |
 
-Composite foreign keys prevent accounts, categories and refund links from referencing another user's records. The API role has table-level data permissions. Private endpoints will also need to enforce user authorization.
+Composite foreign keys prevent accounts, categories and refund links from referencing another user's records. The API role has schema usage and explicit table grants. The private preview routes authenticate server requests and scope stored preferences and financial references to the configured owner.
 
 Transaction amounts use `numeric(20,6)` and a separate debit or credit direction. Read amounts as `Decimal` in Python. Preserve source dates that have no time component and convert timestamps to `America/Sao_Paulo` before assigning an `occurred_on` date. For reporting, sum posted entries by currency. Count card bill payments as transfers and linked refunds against the original expense. PostgreSQL checks that both entries are posted, have the same currency, and that their total refunds do not exceed the original amount, including during concurrent writes.
 

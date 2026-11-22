@@ -75,17 +75,16 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
   const type = optionValue(params.get("tipo"), types.map(option => option.value));
   const category = optionValue(params.get("categoria"), ledgerCategoryOptions.map(option => option.value));
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
-  const matches = reportedTransactions.filter(transaction => {
+  const matches = reportedTransactions.flatMap(transaction => {
     const annotation = annotations[transaction.id];
-    return period.includes(transaction.date)
-      && (!type || transaction.kind === type)
-      && (!category || transactionCategoryKey(transaction) === category)
-      && matchesSearch(search, transaction.name, annotation?.classification, ...(annotation?.tags ?? []));
+    const labels = [annotation?.classification, ...(transaction.tags ?? []), ...(annotation?.tags ?? [])];
+    if (!period.includes(transaction.date)
+      || (type && transaction.kind !== type)
+      || (category && transactionCategoryKey(transaction) !== category)
+      || !matchesSearch(search, transaction.name, ...labels)) return [];
+    return [{ transaction, annotation: labels.filter(Boolean).join(" · ") }];
   });
-  const rows = orderedTransactions(matches.map(transaction => {
-    const annotation = annotations[transaction.id];
-    return { transaction, annotation: annotation && [annotation.classification, ...annotation.tags].filter(Boolean).join(" · ") };
-  }), order);
+  const rows = orderedTransactions(matches, order);
 
   return (
     <SectionCard id="historico-lancamentos" title="Histórico de lançamentos"
@@ -197,6 +196,7 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
           { label: transaction.accountId ? "Impacto nesta conta" : transaction.investmentId ? "Impacto neste investimento" : "Impacto no saldo em contas", value: impact === 0 ? "Sem efeito" : formatSignedMoney(impact) },
           { label: "Tipo", value: transactionKindLabels[transaction.kind] },
           { label: "Categoria", value: transactionCategory(transaction) },
+          ...(transaction.tags?.length ? [{ label: "Tags", value: transaction.tags.join(" · ") }] : []),
           ...(source ? [{ label: "Conta ou cartão", value: source }] : []),
         ]} />
       </SectionCard>
