@@ -1,5 +1,10 @@
 "use client";
 
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
 import Link from "next/link";
 import { useState } from "react";
 import { BreakdownList } from "../../components/cards/breakdown-list";
@@ -10,10 +15,12 @@ import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } fro
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
+import { TagEditor } from "../../components/details/tag-editor";
+import { TagFilter, useTagFilter } from "../../components/details/tag-filter";
 import { kindOptions, orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
-import { bankBalanceImpact, isIncoming, type Transaction, transactionCategory, transactionCategoryKey, transactionKindLabels } from "../../lib/finance";
+import { bankBalanceImpact, isIncoming, matchesTransactionTags, type Transaction, transactionCategory, transactionCategoryKey, transactionKindLabels, transactionTotals } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
 import { optionValue } from "../../lib/report-links";
 
@@ -31,6 +38,7 @@ const statusOptions = [
 
 export function TransactionsPage() {
   const { params, href } = useReportQuery();
+  const tagFilter = useTagFilter(params);
   const { reportedTransactions } = useFinancialReports();
   const dashboardMonth = params.get("painelMes");
   const refunds = params.get("aba") === "reembolsos";
@@ -55,19 +63,24 @@ export function TransactionsPage() {
   }
 
   return (
-    <ReportLayout title="Lançamentos" dashboardMonth={dashboardMonth}>
+    <ReportLayout title="Lançamentos" dashboardMonth={dashboardMonth} dashboardTags={tagFilter.query}>
       <ReportNavigation label="Detalhes de lançamentos" options={[
         { label: "Todos os lançamentos", href: href({ aba: undefined }), active: !refunds },
         { label: "Reembolsos", href: href({ aba: "reembolsos" }), active: refunds },
       ]} />
-      {refunds ? <Refunds /> : <TransactionLedger search={search} setSearch={setSearch} />}
+      {refunds ? <Refunds /> : <TransactionLedger search={search} setSearch={setSearch} tagFilter={tagFilter} />}
     </ReportLayout>
   );
 }
 
-function TransactionLedger({ search, setSearch }: { search: string; setSearch: (value: string) => void }) {
+function TransactionLedger({ search, setSearch, tagFilter }: {
+  search: string;
+  setSearch: (value: string) => void;
+  tagFilter: ReturnType<typeof useTagFilter>;
+}) {
   const { params, href, update } = useReportQuery();
   const { live, reportedTransactions } = useFinancialReports();
+  const [editingId, setEditingId] = useState<string>();
   const annotations = useReceiptAnnotations(!live);
   const period = usePeriod(params);
   const ledgerCategoryOptions = useCategoryOptions(true);
@@ -75,16 +88,41 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
   const type = optionValue(params.get("tipo"), types.map(option => option.value));
   const category = optionValue(params.get("categoria"), ledgerCategoryOptions.map(option => option.value));
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
+  const tagNames = new Map(tagFilter.tags.map(tag => [tag.id, tag.name]));
+  const editing = editingId ? reportedTransactions.find(transaction => transaction.id === editingId) : undefined;
+
+  function transactionTagNames(transaction: Transaction) {
+    return transaction.tagIds?.map(id => tagNames.get(id)) ?? [];
+  }
+
+  function renderTags(transaction: Transaction) {
+    if (transaction.tagIds === undefined) return "—";
+    const names = transactionTagNames(transaction).filter(Boolean).join(" · ");
+    return (
+      <button
+        className="report-link report-action"
+        type="button"
+        aria-haspopup="dialog"
+        aria-label={names ? `Editar etiquetas de ${transaction.name}: ${names}` : `Adicionar etiquetas a ${transaction.name}`}
+        onClick={() => setEditingId(transaction.id)}
+      >
+        {names || "Adicionar etiquetas"}
+      </button>
+    );
+  }
+
   const matches = reportedTransactions.flatMap(transaction => {
     const annotation = annotations[transaction.id];
     const labels = [annotation?.classification, ...(transaction.tags ?? []), ...(annotation?.tags ?? [])];
     if (!period.includes(transaction.date)
+      || !matchesTransactionTags(transaction, tagFilter.selected)
       || (type && transaction.kind !== type)
       || (category && transactionCategoryKey(transaction) !== category)
-      || !matchesSearch(search, transaction.name, ...labels)) return [];
+      || !matchesSearch(search, transaction.name, ...labels, ...transactionTagNames(transaction))) return [];
     return [{ transaction, annotation: labels.filter(Boolean).join(" · ") }];
   });
   const rows = orderedTransactions(matches, order);
+  const totals = transactionTotals(rows.map(row => row.transaction));
 
   return (
     <SectionCard id="historico-lancamentos" title="Histórico de lançamentos"
@@ -95,9 +133,40 @@ function TransactionLedger({ search, setSearch }: { search: string; setSearch: (
         <ReportSelect label="Categoria" value={category} options={ledgerCategoryOptions} onChange={value => update({ categoria: value })} />
         <SearchField value={search} onChange={setSearch} />
         <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
+        <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
       </div>
       <p className="report-muted" role="status">{rows.length} {rows.length === 1 ? "lançamento" : "lançamentos"}</p>
-      <TransactionTable label="Lançamentos filtrados" rows={rows} balanceScope="consolidated" getHref={id => href({ lancamento: id })} />
+      {live && <ReportMetrics items={[
+        { label: "Entradas", value: formatMoney(totals.incomingCents) },
+        { label: "Saídas", value: formatMoney(totals.outgoingCents) },
+        { label: "Total líquido", value: formatMoney(totals.netCents) },
+      ]} />}
+      <TransactionTable
+        label="Lançamentos filtrados"
+        rows={rows}
+        balanceScope="consolidated"
+        getHref={id => href({ lancamento: id })}
+        renderTags={live ? renderTags : undefined}
+      />
+      {live && editing?.tagIds !== undefined && (
+        <Dialog
+          open
+          fullWidth
+          onClose={() => setEditingId(undefined)}
+          aria-labelledby="etiquetas-dialog-title"
+          aria-describedby="etiquetas-dialog-transaction"
+          slotProps={{ paper: { sx: { bgcolor: "var(--surface)", color: "var(--text-primary)", borderRadius: "var(--radius-card)", m: { xs: 2, sm: 4 } } } }}
+        >
+          <DialogTitle id="etiquetas-dialog-title">Editar etiquetas</DialogTitle>
+          <DialogContent dividers>
+            <DialogContentText id="etiquetas-dialog-transaction" sx={{ mb: 2 }}>{editing.name}</DialogContentText>
+            <TagEditor key={editing.id} entryId={editing.id} tagIds={editing.tagIds} tags={tagFilter.tags} />
+          </DialogContent>
+          <DialogActions>
+            <button className="report-button" type="button" onClick={() => setEditingId(undefined)}>Fechar</button>
+          </DialogActions>
+        </Dialog>
+      )}
     </SectionCard>
   );
 }
@@ -179,7 +248,7 @@ function RefundCredits({ group }: { group: RefundGroup }) {
 
 function TransactionDetail({ transaction }: { transaction: Transaction }) {
   const { href } = useReportQuery();
-  const { live, trackedRefunds, transactionSource } = useFinancialReports();
+  const { live, tags, trackedRefunds, transactionSource } = useFinancialReports();
   const annotations = useReceiptAnnotations(!live);
   const group = trackedRefunds.find(({ expense }) => {
     const expenseId = transaction.kind === "refund" ? transaction.expenseId : transaction.id;
@@ -201,6 +270,11 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
         ]} />
       </SectionCard>
       {transaction.kind === "expense" && <CategoryEditor transaction={transaction} />}
+      {live && transaction.tagIds !== undefined && (
+        <SectionCard id="etiquetas-lancamento" title="Etiquetas">
+          <TagEditor entryId={transaction.id} tagIds={transaction.tagIds} tags={tags} />
+        </SectionCard>
+      )}
       {group && (
         <SectionCard id="vinculo-reembolso" title="Acompanhamento do reembolso" description={refundLabels[group.status]}>
           {transaction.kind === "refund" && (

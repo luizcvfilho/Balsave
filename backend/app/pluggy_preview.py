@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app import auth, category_catalog, category_rule_store, category_store, database, pluggy
+from app import auth, category_catalog, category_rule_store, category_store, database, pluggy, tag_store
 from app.category_resolution import apply_categories
 from app.financial_snapshot import load_snapshot
 
@@ -68,10 +68,10 @@ def load_owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dic
     catalog, stale = category_catalog.load_catalog(key)
     data = load_snapshot(items, key, decisions=decisions, position_links=links, include_evidence=True, catalog=catalog)
     data["categoryCatalogStale"] = stale
-    return apply_owner_categories(connection, owner, data)
+    return apply_owner_preferences(connection, owner, data)
 
 
-def apply_owner_categories(connection, owner: UUID, data: dict) -> dict:
+def apply_owner_preferences(connection, owner: UUID, data: dict) -> dict:
     # Re-read preferences even for cached financial data so changes made by
     # another backend worker become visible without another provider fetch.
     categories = category_store.ensure_default_categories(connection, owner)
@@ -79,7 +79,7 @@ def apply_owner_categories(connection, owner: UUID, data: dict) -> dict:
     apply_categories(data, categories, category_store.assignments(connection, owner), rules)
     data["categories"] = categories
     data["categoryRules"] = rules
-    return data
+    return tag_store.apply_tags(connection, owner, data)
 
 
 def owner_snapshot_lock(owner: UUID) -> Lock:
@@ -109,7 +109,7 @@ def owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dict:
     """Read owned financial facts while holding the owner's lock."""
     cached = cached_owner_snapshot(owner, items)
     if cached is not None:
-        return apply_owner_categories(connection, owner, cached)
+        return apply_owner_preferences(connection, owner, cached)
     data = load_owner_snapshot(owner, items, connection)
     if not data["failedConnections"] and not data["failedInvestments"]:
         with snapshot_state_lock:

@@ -1,4 +1,4 @@
-import type { AccountBalance, CreditCard, Transaction } from "../lib/finance";
+import type { AccountBalance, CreditCard, Transaction, TransactionTag } from "../lib/finance";
 
 export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   id: string;
@@ -45,6 +45,7 @@ export type ReportCard = CreditCard & {
 };
 
 export type FinancialData = {
+  tags?: TransactionTag[];
   categories?: LocalCategory[];
   categoryRules?: CategoryRule[];
   categoryCatalogStale?: boolean;

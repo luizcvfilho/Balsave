@@ -106,6 +106,61 @@
   width: 100%;
 }
 
+.report-tag-filter {
+  min-width: 0;
+  padding-inline: 12px;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-button);
+}
+
+.report-filters > .report-tag-filter {
+  flex: 1 0 100%;
+}
+
+.report-tag-filter summary {
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.report-tag-filter fieldset {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0 12px;
+  min-inline-size: 0;
+  padding: 0 0 8px;
+  margin: 0;
+  border: 0;
+}
+
+.report-tag-filter legend {
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.report-tag-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.report-tag-editor fieldset {
+  min-inline-size: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.report-tag-editor-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0 12px;
+  margin-block: 4px 8px;
+}
+
 .report-button {
   align-self: end;
   padding-inline: 16px;
@@ -194,6 +249,11 @@
   overflow-wrap: anywhere;
 }
 
+.report-transaction-tags .report-action {
+  max-width: 100%;
+  text-align: start;
+}
+
 .report-cell-detail {
   display: block;
   font-size: 0.8125rem;
@@ -237,6 +297,17 @@
 
 .report-choice > :last-child {
   text-align: end;
+}
+
+.report-choice.report-tag-option {
+  justify-content: flex-start;
+  padding-inline: 4px;
+  cursor: pointer;
+}
+
+.report-tag-option > span {
+  overflow-wrap: anywhere;
+  text-align: start;
 }
 
 .report-strong {
@@ -298,6 +369,10 @@
   .report-transaction-payment {
     grid-area: 3 / 1 / 4 / -1;
     color: var(--text-secondary);
+  }
+
+  .report-transaction-tags {
+    grid-area: 4 / 1 / 5 / -1;
   }
 
   .report-table .report-transaction-date {

@@ -5,12 +5,35 @@ import {
   categoryBreakdown,
   expensesWithRefunds,
   ledgerBalanceImpact,
+  matchesTransactionTags,
   spendingByMonth,
   spendingPace,
   summarizeBalances,
   summarizeCards,
   transactionCategoryKey,
+  transactionTotals,
 } from "../src/lib/finance";
+
+test("counts each tagged transaction once in the period and preserves monthly net spending", () => {
+  const transactions = [
+    { id: "flight", name: "Flight", kind: "expense", date: "2026-11-01", amountCents: 10001, tagIds: ["trip", "event"] },
+    { id: "meal", name: "Meal", kind: "expense", date: "2026-11-30", amountCents: 2501, tagIds: ["event"] },
+    { id: "credit", name: "Credit", kind: "income", date: "2026-11-10", amountCents: 700, tagIds: ["trip"] },
+    { id: "book", name: "Book", kind: "expense", date: "2026-11-05", amountCents: 5000 },
+    { id: "old", name: "Old purchase", kind: "expense", date: "2026-10-31", amountCents: 3000, tagIds: ["trip"] },
+    { id: "refund", name: "Refund", kind: "refund", expenseId: "flight", date: "2026-12-01", amountCents: 1000 },
+  ] as const;
+  const selected = new Set(["event", "trip"]);
+  const matches = transactions.filter(transaction => transaction.date >= "2026-11-01" && transaction.date <= "2026-11-30"
+    && matchesTransactionTags(transaction, selected));
+  expect(matches.map(transaction => transaction.id)).toEqual(["flight", "meal", "credit"]);
+  expect(transactionTotals(matches)).toEqual({ incomingCents: 700, outgoingCents: 12502, netCents: -11802 });
+  expect(matchesTransactionTags(transactions[3], new Set())).toBe(true);
+
+  const spending = spendingByMonth(transactions, "2026-12-02", selected);
+  expect(categoryBreakdown(spending, "2026-11").totalCents).toBe(11502);
+  expect(spendingPace(spending, "2026-11-30").at(-1)?.currentCents).toBe(11502);
+});
 
 test("consolidates accounts by bank and totals card usage and limits separately", () => {
   expect(summarizeBalances([

@@ -23,12 +23,15 @@ export const paymentMethodLabels = {
   check: "Cheque",
 };
 
+export type TransactionTag = { id: string; name: string };
+
 export type Transaction = {
   id: string;
   date: string;
   name: string;
   amountCents: number;
   tags?: readonly string[];
+  tagIds?: readonly string[];
   accountId?: string;
   cardId?: string;
   investmentId?: string;
@@ -75,6 +78,20 @@ export const transactionKindLabels = {
 export function isIncoming(transaction: Transaction) {
   return transaction.kind === "income" || transaction.kind === "refund" || transaction.kind === "credit"
     || (transaction.kind === "transfer" && transaction.direction === "in");
+}
+
+export function matchesTransactionTags(transaction: Transaction, selected: ReadonlySet<string>) {
+  return selected.size === 0 || (transaction.tagIds?.some(id => selected.has(id)) ?? false);
+}
+
+export function transactionTotals(transactions: readonly Transaction[]) {
+  let incomingCents = 0;
+  let outgoingCents = 0;
+  for (const transaction of transactions) {
+    if (isIncoming(transaction)) incomingCents += transaction.amountCents;
+    else outgoingCents += transaction.amountCents;
+  }
+  return { incomingCents, outgoingCents, netCents: incomingCents - outgoingCents };
 }
 
 export function bankBalanceImpact(transaction: Transaction) {
@@ -200,10 +217,10 @@ export function expensesWithRefunds(transactions: readonly Transaction[], asOf: 
     });
 }
 
-export function spendingByMonth(transactions: readonly Transaction[], asOf: string) {
+export function spendingByMonth(transactions: readonly Transaction[], asOf: string, selectedTags?: ReadonlySet<string>) {
   const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number>; categoryLabels: Map<string, string>; installmentCents: number }>();
   for (const { expense, netCents } of expensesWithRefunds(transactions, asOf)) {
-    if (netCents === 0) continue;
+    if (netCents === 0 || (selectedTags && !matchesTransactionTags(expense, selectedTags))) continue;
 
     const month = expense.date.slice(0, 7);
     const day = Number(expense.date.slice(8));

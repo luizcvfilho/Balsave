@@ -123,7 +123,7 @@ Revisions live in `backend/migrations/versions/`. Run the following commands fro
 make migrate
 ```
 
-To run the authentication, refund and category integration tests, set `BALSAVE_TEST_DATABASE_URL` to the migration role's connection URL for a disposable PostgreSQL database migrated to `head`. The API tests create two identities and exercise the application role through the FastAPI request handlers. The browser tests run the real Better Auth integration with a synthetic financial backend. Configure the test database's identity role with `BALSAVE_IDENTITY_DB_PASSWORD` using the migration service or `python -m app.configure_identity_role`, then export that same test password for Playwright. Run the following commands from the repository root.
+To run the authentication, refund, category and tag integration tests, set `BALSAVE_TEST_DATABASE_URL` to the migration role's connection URL for a disposable PostgreSQL database migrated to `head`. The API tests create two identities and exercise the application role through the FastAPI request handlers. The browser tests run the real Better Auth integration with a synthetic financial backend. Configure the test database's identity role with `BALSAVE_IDENTITY_DB_PASSWORD` using the migration service or `python -m app.configure_identity_role`, then export that same test password for Playwright. Run the following commands from the repository root.
 
 ```sh
 (cd backend && uv run --locked python -m unittest discover -s tests -v)

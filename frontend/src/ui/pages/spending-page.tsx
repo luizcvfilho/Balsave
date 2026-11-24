@@ -9,30 +9,33 @@ import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } fro
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
+import { TagFilter, useTagFilter } from "../../components/details/tag-filter";
 import { orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { useFinancialReports } from "../../data/financial-reports";
-import { categoryKeyForLabel, transactionCategory, transactionCategoryKey } from "../../lib/finance";
+import { categoryKeyForLabel, matchesTransactionTags, spendingByMonth, transactionCategory, transactionCategoryKey } from "../../lib/finance";
 import { formatDate, formatMoney, formatMonthName, formatNumericDate } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
 export function SpendingPage() {
-  const { params, href } = useReportQuery();
+  const { params, href, update } = useReportQuery();
+  const tagFilter = useTagFilter(params);
   const rhythm = params.get("aba") === "ritmo";
   const dashboardMonth = params.get("painelMes");
 
   return (
-    <ReportLayout title={rhythm ? "Ritmo de gastos" : "Gastos por categoria"} dashboardMonth={dashboardMonth}>
+    <ReportLayout title={rhythm ? "Ritmo de gastos" : "Gastos por categoria"} dashboardMonth={dashboardMonth} dashboardTags={tagFilter.query}>
       <ReportNavigation label="Detalhes de gastos" options={[
         { label: "Por categoria", href: href({ aba: undefined }), active: !rhythm },
         { label: "Ritmo de gastos", href: href({ aba: "ritmo" }), active: rhythm },
       ]} />
-      {rhythm ? <SpendingRhythm /> : <CategoryExpenses />}
+      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
+      {rhythm ? <SpendingRhythm tagFilter={tagFilter} /> : <CategoryExpenses tagFilter={tagFilter} />}
     </ReportLayout>
   );
 }
 
-function CategoryExpenses() {
+function CategoryExpenses({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilter> }) {
   const { params, update } = useReportQuery();
   const period = usePeriod(params, undefined, true);
   const { asOf, expenses, live, plannedInstallments } = useFinancialReports();
@@ -42,6 +45,7 @@ function CategoryExpenses() {
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
   const results = expenses.filter(({ expense }) => period.includes(expense.date)
+    && matchesTransactionTags(expense, tagFilter.selected)
     && (!category || transactionCategoryKey(expense) === category)
     && (!installmentsOnly || expense.installment)
     && matchesSearch(search, expense.name));
@@ -50,10 +54,12 @@ function CategoryExpenses() {
   })), order);
   const total = results.reduce((sum, row) => sum + row.netCents, 0);
   const dashboardMonth = params.get("painelMes") ?? undefined;
-  const plansInPeriod = plannedInstallments.filter(plan => period.includes(plan.date));
+  const plansInPeriod = tagFilter.selected.size ? [] : plannedInstallments.filter(plan => period.includes(plan.date));
   const plans = plansInPeriod.filter(plan => (!category || (plan.categoryKey ?? categoryKeyForLabel(plan.category)) === category) && matchesSearch(search, plan.name));
   const plannedCents = plans.reduce((sum, plan) => sum + plan.amountCents, 0);
-  const transactionHref = (id: string) => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id });
+  const transactionHref = (id: string) => reportHref("/lancamentos", {
+    painelMes: dashboardMonth, etiquetas: tagFilter.query, lancamento: id,
+  });
 
   return (
     <>
@@ -108,12 +114,13 @@ function CategoryExpenses() {
   );
 }
 
-function SpendingRhythm() {
+function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilter> }) {
   const { params, update } = useReportQuery();
-  const { monthOptions, months, currentMonth, asOf, expenses, paceChartPoints, canCompare } = useFinancialReports();
+  const { monthOptions, months, currentMonth, asOf, expenses, spending, reportedTransactions, paceChartPoints, canCompare } = useFinancialReports();
   const month = optionValue(params.get("ritmoMes"), months,
     optionValue(params.get("mes"), months, currentMonth));
-  const points = paceChartPoints(month);
+  const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected) : spending;
+  const points = paceChartPoints(month, monthlySpending);
   const lastReported = month === currentMonth ? Number(asOf.slice(8)) : points.length;
   const requestedDay = Number(params.get("dia"));
   const day = Number.isInteger(requestedDay) && requestedDay >= 1 && requestedDay <= points.length ? requestedDay : lastReported;
@@ -123,7 +130,7 @@ function SpendingRhythm() {
   const categories = new Map<string, { name: string; cents: number }>();
   const dailyRows = [];
   for (const { expense, netCents, receivedCents } of expenses) {
-    if (!expense.date.startsWith(month) || expense.date > date) continue;
+    if (!expense.date.startsWith(month) || expense.date > date || !matchesTransactionTags(expense, tagFilter.selected)) continue;
     if (expense.date === date) dailyRows.push({ transaction: expense, netCents, receivedCents });
     if (netCents === 0) continue;
     const category = transactionCategoryKey(expense);
@@ -158,7 +165,7 @@ function SpendingRhythm() {
           <TransactionTable
             label="Lançamentos do dia"
             rows={orderedTransactions(dailyRows)}
-            getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, lancamento: id })}
+            getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, etiquetas: tagFilter.query, lancamento: id })}
             empty="Nenhum gasto neste dia."
           />
         ) : <p className="report-muted">Dados disponíveis até {formatDate(asOf)}.</p>}
@@ -171,7 +178,7 @@ function SpendingRhythm() {
                 key,
                 label: (
                   <Link className="report-link report-action" href={reportHref("/gastos", {
-                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: key, painelMes: dashboardMonth,
+                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: key, painelMes: dashboardMonth, etiquetas: tagFilter.query,
                   })}>{name}</Link>
                 ),
                 value: formatMoney(cents),

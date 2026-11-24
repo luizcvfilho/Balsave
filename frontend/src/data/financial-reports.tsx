@@ -10,6 +10,7 @@ import { cardLabel, type FinancialData } from "./financial-data";
 
 function buildReports(data: FinancialData, live: boolean) {
   const { accounts, asOf, balanceSnapshots, cards } = data;
+  const tags = data.tags ?? [];
   const investments = data.investments ?? [];
   const positions = [...accounts, ...investments.filter(position => !position.includedInAccountId)];
   const currentMonth = asOf.slice(0, 7);
@@ -40,9 +41,9 @@ function buildReports(data: FinancialData, live: boolean) {
   }
   for (const investment of investments) sources.set(investment.id, `${investment.bank} · ${investment.name}`);
 
-  function paceChartPoints(month: string) {
+  function paceChartPoints(month: string, monthlySpending = spending) {
     const end = month === currentMonth ? asOf : `${month}-${daysInMonth(month)}`;
-    return spendingPace(spending, end).map(({ day, currentCents, averageCents }) => ({
+    return spendingPace(monthlySpending, end).map(({ day, currentCents, averageCents }) => ({
       axisLabel: String(day).padStart(2, "0"),
       label: `Dia ${day} de ${formatMonthName(month)}`,
       values: [currentCents, averageCents],
@@ -96,7 +97,7 @@ function buildReports(data: FinancialData, live: boolean) {
   }
 
   return {
-    ...data, investments, positions, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
+    ...data, tags, investments, positions, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
     plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
     expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
   };

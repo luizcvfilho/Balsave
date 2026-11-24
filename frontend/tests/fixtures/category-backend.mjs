@@ -20,6 +20,8 @@ const initialCategories = [
 let categories;
 let assignment;
 let rules;
+let tags;
+let transactionTags;
 let snapshotUnavailable;
 let assignmentConflict;
 
@@ -50,6 +52,8 @@ async function reset() {
   categories = structuredClone(initialCategories);
   assignment = undefined;
   rules = [];
+  tags = [];
+  transactionTags = [];
   snapshotUnavailable = false;
   assignmentConflict = false;
 }
@@ -78,9 +82,10 @@ function snapshot() {
         id: transactionId, accountId, name: "Loja de equipamentos", date: "2026-11-15", kind: "expense", amountCents: 12500,
         category: category.name, categoryId: category.id, categoryKey: category.code ?? `custom:${category.id}`,
         categorySource: assignment ? "manual" : rule ? "rule" : "pluggy", providerCategoryId: "08020000", providerCategoryName: "Electronics",
-        providerCategoryLabel: "Eletrônicos", categoryNeedsReview: false,
+        providerCategoryLabel: "Eletrônicos", categoryNeedsReview: false, tagIds: transactionTags,
       }],
       categories,
+      tags,
       categoryRules: rules,
       balanceSnapshots: [],
       connectionCount: 1,
@@ -180,6 +185,24 @@ createServer(async (request, response) => {
     const category = categories.find(item => item.id === body.categoryId && !item.archived);
     if (body.categoryId !== null && !category) return respond(response, 404, { detail: "Category unavailable" });
     assignment = body.categoryId ?? undefined;
+    return respond(response, 200, { saved: true });
+  }
+  if (path === "tag-create" && request.method === "POST") {
+    if (tags.some(tag => tag.name.toLocaleLowerCase("pt-BR") === body.name?.trim().toLocaleLowerCase("pt-BR"))) return respond(response, 409, { detail: "Tag already exists" });
+    const tag = { id: randomUUID(), name: body.name.trim() };
+    tags.push(tag);
+    return respond(response, 200, { tag });
+  }
+  if (path === "tag-update" && request.method === "POST") {
+    const tag = tags.find(item => item.id === body.tagId);
+    if (!tag) return respond(response, 404, { detail: "Tag unavailable" });
+    if (tags.some(item => item.id !== tag.id && item.name.toLocaleLowerCase("pt-BR") === body.name?.trim().toLocaleLowerCase("pt-BR"))) return respond(response, 409, { detail: "Tag already exists" });
+    tag.name = body.name.trim();
+    return respond(response, 200, { tag });
+  }
+  if (path === "transaction-tags" && request.method === "POST") {
+    if (body.entryId !== transactionId || !body.tagIds.every(id => tags.some(tag => tag.id === id))) return respond(response, 404, { detail: "Resource unavailable" });
+    transactionTags = body.tagIds;
     return respond(response, 200, { saved: true });
   }
   if (path === "category-rule-preview" && request.method === "POST") return respond(response, 200, { preview: rulePreview(body) });

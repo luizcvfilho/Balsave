@@ -115,6 +115,7 @@ export async function revokeSession(viewKey: string | null) {
 type FinancialReadPath = "snapshot" | "categories";
 type FinancialMutationPath = "token" | "connections" | "reconciliation" | "position-links"
   | "category-create" | "category-update" | "transaction-category"
+  | "tag-create" | "tag-update" | "transaction-tags"
   | "category-rule-preview" | "category-rule-save" | "category-rule-update";
 
 export async function financialRequest(path: FinancialReadPath): Promise<Response | undefined>;

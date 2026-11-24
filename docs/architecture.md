@@ -22,11 +22,17 @@ FastAPI derives the owner ID from the session for each private route. It retriev
 
 Migration `0008` introduces a dedicated identity schema and database role. Registration creates a financial owner and Better Auth credentials in a single transaction. PostgreSQL assigns the owner through an insert trigger. The identity role cannot write owner mappings or access financial records. The administrator can [link a legacy login](../README.md#migrate-existing-logins) to its existing owner ID and preserve its scrypt hash. The previous credential tables are restricted to database administrators.
 
+Migration `0009` remains in the migration history so databases that already applied it can continue to upgrade. The account metadata added by that migration is retained while the authenticated reports use Pluggy snapshots.
+
+Migration `0010` stores personal tags and their assignments using the owner and existing provider transaction reference. The write API verifies the transaction against the owner's Pluggy snapshot and validates every selected tag before replacing the assignments in one database transaction. Snapshot responses re-read tag preferences from PostgreSQL so they appear after provider refreshes and across backend workers.
+
 ## Amounts and reporting dates
 
 The development plan proposed storing BRL amounts as integer cents in PostgreSQL. The existing ledger schema uses exact `numeric(20,6)` amounts with a currency code and a separate debit or credit direction. This preserves source precision up to six decimal places. Python reads these amounts as `Decimal`. Keep this schema for the foundation. The BRL reporting boundary uses integer cents for the demo and frontend calculations. FastAPI converts supported BRL snapshot amounts to cents with decimal `ROUND_HALF_UP` rounding before sending them to the frontend.
 
 `transactions.occurred_on` is a PostgreSQL `date`. The demo's `YYYY-MM-DD` strings and period boundaries represent dates in `America/Sao_Paulo`. For provider data, the API preserves date-only values and converts timestamps to the reporting timezone before selecting the date. The browser formats the resulting date and BRL amounts in `pt-BR`. A linked refund appears as a credit on the receipt date and reduces spending in the original purchase month once the receipt is within the report's cutoff date.
+
+“Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Painel financeiro” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
 
 ## Starting history
 

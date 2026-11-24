@@ -143,6 +143,7 @@ test("finds the demo event across three categories in the ledger", async ({ page
   await expect(ledger.getByRole("link")).toHaveCount(1);
   await ledger.getByRole("link", { name: "Cinema", exact: true }).click();
   await expect(page.getByText("Mostra de cinema", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Etiquetas", exact: true })).toHaveCount(0);
 });
 
 test("reports the hotel net expense in the purchase month and the credit in the receipt month", async ({ page }) => {

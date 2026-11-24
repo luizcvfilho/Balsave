@@ -14,9 +14,10 @@ import { LineChart } from "../../components/charts/line-chart";
 import { RecentTransactions } from "../../components/dashboard/recent-transactions";
 import { SpendingCategories } from "../../components/dashboard/spending-categories";
 import { useReportQuery } from "../../components/details/report-query";
+import { TagFilter, useTagFilter } from "../../components/details/tag-filter";
 import { accountBalances, cardLabel } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
-import { categoryBreakdown, summarizeBalances, summarizeCards } from "../../lib/finance";
+import { categoryBreakdown, matchesTransactionTags, spendingByMonth, summarizeBalances, summarizeCards } from "../../lib/finance";
 import { formatAvailableMoney, formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
 
@@ -24,6 +25,7 @@ const twoColumns = "repeat(2, minmax(0, 1fr))";
 
 export function DashboardPage() {
   const { params, update } = useReportQuery();
+  const tagFilter = useTagFilter(params);
   const {
     accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
     balanceHistory, balanceChartPoint, failedConnections, failedInvestments, investments, live,
@@ -31,21 +33,28 @@ export function DashboardPage() {
   const currentDay = Number(asOf.slice(8));
   const balances = summarizeBalances(accountBalances(accounts));
   const cards = summarizeCards(cardList);
-  const categoryPeriods = planningMonths.map(month => categoryBreakdown(spending, month));
-  const pacePoints = paceChartPoints(currentMonth);
+  const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected) : spending;
+  const categoryPeriods = planningMonths.map(month => categoryBreakdown(monthlySpending, month));
+  const pacePoints = paceChartPoints(currentMonth, monthlySpending);
   const comparison = canCompare(currentMonth);
   const evolution = balanceHistory();
   const history = evolution.points.slice(-6);
   const balancePoints = history.map(balanceChartPoint);
-  const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)).reverse();
+  const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)
+    && matchesTransactionTags(transaction, tagFilter.selected)).reverse();
   const recentTransactions = live ? latest.slice(0, 10) : latest;
   const month = optionValue(params.get("mes"), planningMonths, currentMonth);
-  const plannedCents = plannedInstallments.reduce((sum, plan) => sum + (plan.date.startsWith(month) ? plan.amountCents : 0), 0);
+  const plannedCents = tagFilter.selected.size ? 0
+    : plannedInstallments.reduce((sum, plan) => sum + (plan.date.startsWith(month) ? plan.amountCents : 0), 0);
   const [paceIndex, setPaceIndex] = useState(currentDay - 1);
   const [balanceIndex, setBalanceIndex] = useState(history.length - 1);
 
   function details(path: string, values: Record<string, string | undefined> = {}) {
-    return reportHref(path, { painelMes: month === currentMonth ? undefined : month, ...values });
+    return reportHref(path, {
+      painelMes: month === currentMonth ? undefined : month,
+      etiquetas: path === "/gastos" || path === "/lancamentos" ? tagFilter.query : undefined,
+      ...values,
+    });
   }
 
   const cardUsage = cards.usedCents !== null && cards.limitCents !== null && cards.limitCents > 0
@@ -129,6 +138,7 @@ export function DashboardPage() {
         />
       </Box>
 
+      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
       <Box sx={{ display: "grid", gap: "inherit", gridTemplateColumns: { md: "minmax(0, 1.45fr) minmax(0, 1fr)" } }}>
         <SectionCard
           id="ritmo"

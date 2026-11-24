@@ -6,15 +6,16 @@ import type { ReactNode } from "react";
 import { useFinancialReports } from "../../data/financial-reports";
 import { optionValue, reportHref } from "../../lib/report-links";
 
-export function ReportLayout({ title, dashboardMonth, children, back }: {
+export function ReportLayout({ title, dashboardMonth, dashboardTags, children, back }: {
   title: string;
   dashboardMonth: string | null;
+  dashboardTags?: string;
   children: ReactNode;
   back?: { href: string; label: string };
 }) {
   const { live, months, failedConnections, failedInvestments, categoryCatalogStale } = useFinancialReports();
   const month = optionValue(dashboardMonth, months);
-  const backLink = back ?? { href: reportHref("/", { mes: month }), label: "Voltar ao painel" };
+  const backLink = back ?? { href: reportHref("/", { mes: month, etiquetas: dashboardTags }), label: "Voltar ao painel" };
 
   return (
     <Container component="main" maxWidth="lg" className="report-layout">

@@ -116,6 +116,8 @@ class CategoryApiTests(TestCase):
                 connection.execute("DELETE FROM balsave.investment_account_links WHERE user_id=%s", (owner,))
                 connection.execute("DELETE FROM balsave.category_rules WHERE user_id=%s", (owner,))
                 connection.execute("DELETE FROM balsave.transaction_category_assignments WHERE user_id=%s", (owner,))
+                connection.execute("DELETE FROM balsave.transaction_tags WHERE user_id=%s", (owner,))
+                connection.execute("DELETE FROM balsave.tags WHERE user_id=%s", (owner,))
                 connection.execute("DELETE FROM balsave.categories WHERE user_id=%s", (owner,))
                 connection.execute("DELETE FROM balsave.users WHERE id=%s", (owner,))
 
@@ -341,6 +343,37 @@ class CategoryApiTests(TestCase):
         for payload in ({"name": "  "}, {"name": "Test\nname"}, {"name": "A" * 81}, {"name": "Test", "userId": str(self.other)}):
             self.assertEqual(self.request("POST", "category-create", payload)[0], 422)
         self.assertEqual(self.request("POST", "category-update", {"categoryId": self.foreign_category, "name": None})[0], 422)
+
+    def test_tags_persist_multiple_assignments_across_refresh_and_are_owner_scoped(self):
+        first = self.request("POST", "tag-create", {"name": "Trabalho"})[1]["tag"]
+        second = self.request("POST", "tag-create", {"name": "Casa"})[1]["tag"]
+        foreign = self.request("POST", "tag-create", {"name": "Outro"}, token=self.other_token)[1]["tag"]
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": [first["id"], second["id"]]})[0], 200)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": TRANSFER, "tagIds": [first["id"]]})[0], 200)
+        for _ in range(2):
+            data = self.request("GET", "snapshot")[1]["data"]
+            self.assertEqual(set(data["transactions"][0]["tagIds"]), {first["id"], second["id"]})
+            self.assertEqual(data["transactions"][1]["tagIds"], [first["id"]])
+            self.assertEqual({tag["id"] for tag in data["tags"]}, {first["id"], second["id"]})
+            preview.snapshot_cache.clear()
+        self.assertEqual(self.request("POST", "tag-update", {"tagId": first["id"], "name": "Projeto"})[0], 200)
+        self.assertEqual(self.request("GET", "snapshot")[1]["data"]["tags"][1]["name"], "Projeto")
+        self.assertEqual(self.request("POST", "tag-update", {"tagId": foreign["id"], "name": "Teste"})[0], 404)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": [foreign["id"]]})[0], 404)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": []}, token=self.other_token)[0], 404)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": []})[0], 200)
+        self.assertEqual(self.request("GET", "snapshot")[1]["data"]["transactions"][0]["tagIds"], [])
+
+    def test_tag_validation_and_authentication(self):
+        tag = self.request("POST", "tag-create", {"name": "Teste"})[1]["tag"]
+        self.assertEqual(self.request("POST", "tag-create", {"name": " teste "})[0], 409)
+        for payload in ({"name": " "}, {"name": "A\nB"}, {"name": "A" * 81}, {"name": "Teste", "userId": str(self.other)}):
+            self.assertEqual(self.request("POST", "tag-create", payload)[0], 422)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": [tag["id"], tag["id"]]})[0], 422)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": f"{uuid4()}.{uuid4()}", "tagIds": []})[0], 404)
+        for path, payload in (("tag-create", {"name": "A"}), ("tag-update", {"tagId": tag["id"], "name": "A"}), ("transaction-tags", {"entryId": ENTRY, "tagIds": []})):
+            self.assertEqual(self.request("POST", path, payload, token="")[0], 401)
+            self.assertEqual(self.request("POST", path, payload, secret="")[0], 403)
 
     def rule_draft(self, **changes):
         return {"categoryId": self.create()["id"], "description": "Equipment", "matchType": "exact", "accountId": None,

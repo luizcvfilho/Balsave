@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/a11y/noRedundantRoles: Retain native table semantics in Safari when the mobile layout stacks the cells. */
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useFinancialReports } from "../../data/financial-reports";
 import { bankBalanceImpact, isIncoming, ledgerBalanceImpact, paymentMethodLabels, type Transaction, transactionCategory } from "../../lib/finance";
 import { formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
@@ -39,11 +40,12 @@ export function orderedTransactions(rows: TransactionRow[], order = "recent") {
   });
 }
 
-export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, balanceScope, empty = "Nenhum lançamento para os filtros selecionados." }: {
+export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, renderTags, balanceScope, empty = "Nenhum lançamento para os filtros selecionados." }: {
   label: string;
   rows: TransactionRow[];
   getHref: (id: string) => string;
   showPaymentMethod?: boolean;
+  renderTags?: (transaction: Transaction) => ReactNode;
   balanceScope?: "account" | "consolidated";
   empty?: string;
 }) {
@@ -56,6 +58,7 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
         <tr role="row">
           <th role="columnheader" scope="col">Descrição</th>
           <th role="columnheader" scope="col">Categoria</th>
+          {renderTags && <th role="columnheader" scope="col">Etiquetas</th>}
           {showPaymentMethod && <th role="columnheader" scope="col">Forma de pagamento</th>}
           <th role="columnheader" scope="col">Data</th>
           <th role="columnheader" scope="col">{rows.some(row => row.netCents !== undefined) ? "Gasto líquido" : "Valor"}</th>
@@ -90,6 +93,9 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
                   Alterar categoria
                 </Link>}
               </td>
+              {renderTags && (
+                <td role="cell" className="report-transaction-tags">{renderTags(transaction)}</td>
+              )}
               {showPaymentMethod && (
                 <td role="cell" className="report-transaction-payment">
                   {(paymentMethod && paymentMethodLabels[paymentMethod]) || "Não identificada"}
