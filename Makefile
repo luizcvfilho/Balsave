@@ -25,7 +25,10 @@ env: .env
 	@set -euC; umask 077; \
 		admin_password=$$(openssl rand -hex 24); \
 		app_password=$$(openssl rand -hex 24); \
-		printf 'POSTGRES_PASSWORD=%s\nBALSAVE_DB_PASSWORD=%s\n' "$$admin_password" "$$app_password" > "$@"
+		identity_password=$$(openssl rand -hex 24); \
+		auth_secret=$$(openssl rand -hex 32); \
+		printf 'POSTGRES_PASSWORD=%s\nBALSAVE_DB_PASSWORD=%s\nBALSAVE_IDENTITY_DB_PASSWORD=%s\nBALSAVE_BETTER_AUTH_SECRET=%s\n' \
+			"$$admin_password" "$$app_password" "$$identity_password" "$$auth_secret" > "$@"
 
 # Recreate containers to refresh bind mounts after Docker Desktop or WSL restarts.
 dev: .env

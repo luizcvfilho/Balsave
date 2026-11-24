@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { SectionCard } from "../../components/cards/section-card";
 import { CategoryRuleEditor, ruleMatchLabels } from "../../components/details/category-rule-editor";
+import { useSessionViewKey } from "../../components/layout/session-view-provider";
 import { createCategory, updateCategory, updateCategoryRule } from "../../components/preview/category-actions";
 import type { CategoryAccountOption, CategoryRule, LocalCategory } from "../../data/financial-data";
 
@@ -16,6 +17,7 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
   accounts: CategoryAccountOption[];
   live: boolean;
 }) {
+  const viewKey = useSessionViewKey();
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -33,7 +35,7 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
     {!live && <p className="report-muted">A edição de categorias está disponível ao acessar seus dados. Os dados fictícios são apenas para consulta.</p>}
     <SectionCard id="criar-categoria" title="Criar categoria" description="Organize suas compras com categorias próprias.">
       <form action={() => startTransition(async () => {
-        const result = await createCategory({ name });
+        const result = await createCategory(viewKey, { name });
         setError(!result.ok);
         setMessage(result.ok ? "Categoria criada." : result.message);
         if (result.ok) setName("");
@@ -65,6 +67,7 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
 }
 
 function CategoryItem({ category, live }: { category: LocalCategory; live: boolean }) {
+  const viewKey = useSessionViewKey();
   const [draftName, setDraftName] = useState<string>();
   const [message, setMessage] = useState("");
   const [error, setError] = useState(false);
@@ -73,7 +76,7 @@ function CategoryItem({ category, live }: { category: LocalCategory; live: boole
 
   function save(payload: { name?: string; archived?: boolean }) {
     startTransition(async () => {
-      const result = await updateCategory({ categoryId: category.id, ...payload });
+      const result = await updateCategory(viewKey, { categoryId: category.id, ...payload });
       setError(!result.ok);
       setMessage(result.ok ? payload.name !== undefined ? "Nome atualizado." : payload.archived ? "Categoria arquivada." : "Categoria reativada." : result.message);
       if (result.ok) setDraftName(undefined);
@@ -99,6 +102,7 @@ function CategoryItem({ category, live }: { category: LocalCategory; live: boole
 }
 
 function RuleItem({ rule, categories, accounts, live }: { rule: CategoryRule; categories: LocalCategory[]; accounts: CategoryAccountOption[]; live: boolean }) {
+  const viewKey = useSessionViewKey();
   const [editing, setEditing] = useState(false);
   const [confirmRemoval, setConfirmRemoval] = useState(false);
   const [message, setMessage] = useState("");
@@ -109,7 +113,7 @@ function RuleItem({ rule, categories, accounts, live }: { rule: CategoryRule; ca
 
   function update(remove = false) {
     startTransition(async () => {
-      const result = await updateCategoryRule({ ruleId: rule.id, ...(remove ? { remove: true } : { enabled: false as const }) });
+      const result = await updateCategoryRule(viewKey, { ruleId: rule.id, ...(remove ? { remove: true } : { enabled: false as const }) });
       setError(!result.ok);
       setMessage(result.ok ? "Regra desativada." : result.message);
       if (result.ok) setConfirmRemoval(false);

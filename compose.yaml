@@ -5,6 +5,8 @@ x-app-db-password: &app-db-password "${BALSAVE_DB_PASSWORD:?Set BALSAVE_DB_PASSW
 services:
   proxy:
     image: caddy:2-alpine
+    environment:
+      BALSAVE_TRUSTED_PROXY_CIDRS: "${BALSAVE_TRUSTED_PROXY_CIDRS:-}"
     ports:
       - "${BALSAVE_BIND_ADDRESS:-127.0.0.1}:${BALSAVE_PORT:-8080}:8080"
     volumes:
@@ -21,8 +23,18 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     environment:
-      BALSAVE_PREVIEW_PASSWORD: "${BALSAVE_PREVIEW_PASSWORD:-}"
+      BALSAVE_AUTH_SECRET: "${BALSAVE_AUTH_SECRET:-}"
+      BALSAVE_BETTER_AUTH_SECRET: "${BALSAVE_BETTER_AUTH_SECRET:-}"
+      BALSAVE_IDENTITY_DB_HOST: db
+      BALSAVE_IDENTITY_DB_PASSWORD: "${BALSAVE_IDENTITY_DB_PASSWORD:-}"
+      BALSAVE_APP_ORIGIN: "${BALSAVE_APP_ORIGIN:-http://localhost:8080}"
       BALSAVE_BACKEND_URL: http://backend:8000
+    networks:
+      - default
+      - database
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000', { redirect: 'manual' }).then(r => { if (!r.ok && r.status !== 307) process.exit(1) }).catch(() => process.exit(1))"]
       interval: 15s
@@ -33,10 +45,11 @@ services:
 
   migrate:
     build: ./backend
-    command: ["alembic", "upgrade", "head"]
+    command: ["sh", "-ec", "alembic upgrade head && python -m app.configure_identity_role"]
     environment:
       DB_HOST: db
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file}"
+      BALSAVE_IDENTITY_DB_PASSWORD: "${BALSAVE_IDENTITY_DB_PASSWORD:-}"
     networks:
       - database
     depends_on:
@@ -49,7 +62,7 @@ services:
     environment:
       DB_HOST: db
       BALSAVE_DB_PASSWORD: *app-db-password
-      BALSAVE_PREVIEW_PASSWORD: "${BALSAVE_PREVIEW_PASSWORD:-}"
+      BALSAVE_AUTH_SECRET: "${BALSAVE_AUTH_SECRET:-}"
       PLUGGY_CLIENT_ID: "${PLUGGY_CLIENT_ID:-}"
       PLUGGY_CLIENT_SECRET: "${PLUGGY_CLIENT_SECRET:-}"
     networks:

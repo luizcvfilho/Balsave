@@ -1,22 +1,17 @@
 """Authenticated local category preferences, independent of provider write APIs."""
 
 import re
-from time import monotonic
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
-from app import category_rule_store, category_store, database, pluggy
+from app import auth, category_rule_store, category_store, database, pluggy
 from app import pluggy_preview as preview
 
 
-router = APIRouter(
-    prefix="/_internal/pluggy",
-    dependencies=[Depends(preview.require_preview_service)],
-    include_in_schema=False,
-)
+router = APIRouter(prefix="/_internal/pluggy", include_in_schema=False)
 
 
 class CategoryInput(BaseModel):
@@ -54,10 +49,9 @@ class TransactionCategory(BaseModel):
 
 
 def account_options(owner: UUID, items: tuple[UUID, ...]) -> list[dict]:
-    cached = preview.cached_snapshot
-    if not cached or cached[0] != (owner, items) or monotonic() >= cached[1]:
+    data = preview.cached_owner_snapshot(owner, items)
+    if data is None:
         return []
-    data = cached[2]
     return [
         {"id": row["id"], "label": " · ".join(filter(None, (
             row.get("bank"), row.get("name"), f"final {row['lastFour']}" if row.get("lastFour") else None,
@@ -78,10 +72,10 @@ def available_expense(data: dict, entry_id: str) -> dict:
 
 
 @router.get("/categories")
-def categories():
+def categories(owner: UUID = Depends(auth.require_user)):
     try:
-        owner, items = preview.owner_and_items()
-        with preview.snapshot_lock, database.connect() as connection:
+        items = preview.owner_items(owner)
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             rows = category_store.ensure_default_categories(connection, owner)
             rules = category_rule_store.list_rules(connection, owner)
             options = account_options(owner, items)
@@ -91,10 +85,9 @@ def categories():
 
 
 @router.post("/category-create")
-def create_category(payload: CategoryInput):
+def create_category(payload: CategoryInput, owner: UUID = Depends(auth.require_user)):
     try:
-        owner, _ = preview.owner_and_items()
-        with preview.snapshot_lock, database.connect() as connection:
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             category_store.ensure_default_categories(connection, owner)
             category = category_store.create_category(connection, owner, payload.name)
     except category_store.CategoryConflict:
@@ -105,12 +98,11 @@ def create_category(payload: CategoryInput):
 
 
 @router.post("/category-update")
-def update_category(payload: CategoryUpdate):
+def update_category(payload: CategoryUpdate, owner: UUID = Depends(auth.require_user)):
     if payload.name is None and payload.archived is None:
         raise HTTPException(status_code=422, detail="Provide a category name or archive state")
     try:
-        owner, _ = preview.owner_and_items()
-        with preview.snapshot_lock, database.connect() as connection:
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             category = category_store.update_category(
                 connection, owner, payload.categoryId, name=payload.name, archived=payload.archived,
             )
@@ -124,10 +116,10 @@ def update_category(payload: CategoryUpdate):
 
 
 @router.post("/transaction-category")
-def transaction_category(payload: TransactionCategory):
+def transaction_category(payload: TransactionCategory, owner: UUID = Depends(auth.require_user)):
     try:
-        owner, items = preview.owner_and_items()
-        with preview.snapshot_lock, database.connect() as connection:
+        items = preview.owner_items(owner)
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             if not items:
                 raise HTTPException(status_code=404, detail="The transaction is unavailable for this owner")
             data = preview.owner_snapshot(owner, items, connection)

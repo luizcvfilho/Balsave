@@ -1,54 +1,29 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import {
-  isLocalPreviewHost, newSession, previewCookie, previewPassword, previewRequest, secureEqual, sessionSeconds,
-} from "../../data/preview-session";
+import { financialRequest } from "../../data/session";
 
-export async function signIn(_state: string | undefined, form: FormData) {
-  const password = form.get("password");
-  const expected = previewPassword();
-  if (expected.length < 32 || !await isLocalPreviewHost()) {
-    return "O acesso a dados reais está disponível apenas na configuração local.";
-  }
-  if (typeof password !== "string" || password.length > 256 || !secureEqual(password, expected)) {
-    return "Senha incorreta. Tente novamente.";
-  }
-  (await cookies()).set(previewCookie, newSession(), {
-    secure: true, httpOnly: true, sameSite: "strict", path: "/", maxAge: sessionSeconds,
-  });
-  redirect("/");
-}
-
-export async function signOut() {
-  (await cookies()).set(previewCookie, "", {
-    secure: true, httpOnly: true, sameSite: "strict", path: "/", maxAge: 0,
-  });
-  redirect("/acesso");
-}
-
-export async function startConnection() {
-  const result = await previewRequest("token");
+export async function startConnection(viewKey: string | null) {
+  const result = await financialRequest("token", viewKey);
+  if (result?.status === 429) return { rateLimited: true } as const;
   if (!result?.ok) return;
   const data: { accessToken?: string; connectorId?: number } = await result.json();
   if (typeof data.accessToken === "string" && Number.isInteger(data.connectorId)) {
-    return { accessToken: data.accessToken, connectorId: data.connectorId as number };
+    return { rateLimited: false, accessToken: data.accessToken, connectorId: data.connectorId as number } as const;
   }
 }
 
-export async function registerConnection(itemId: string) {
+export async function registerConnection(viewKey: string | null, itemId: string) {
   if (typeof itemId !== "string" || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(itemId)) return false;
-  const result = await previewRequest("connections", { itemId });
+  const result = await financialRequest("connections", viewKey, { itemId });
   return !!result?.ok;
 }
 
-export async function saveReconciliation(payload: { entryId: string; counterpartId: string | null; remove?: boolean }) {
-  const result = await previewRequest("reconciliation", payload);
+export async function saveReconciliation(viewKey: string | null, payload: { entryId: string; counterpartId: string | null; remove?: boolean }) {
+  const result = await financialRequest("reconciliation", viewKey, payload);
   return !!result?.ok;
 }
 
-export async function saveInvestmentPosition(payload: { investmentId: string; accountId: string | null }) {
-  const result = await previewRequest("position-links", payload);
+export async function saveInvestmentPosition(viewKey: string | null, payload: { investmentId: string; accountId: string | null }) {
+  const result = await financialRequest("position-links", viewKey, payload);
   return !!result?.ok;
 }

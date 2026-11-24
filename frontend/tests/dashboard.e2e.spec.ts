@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+test("shows the demo sign-in link only in the home page header", async ({ page }) => {
+  await page.goto("/");
+  const header = page.getByRole("banner");
+  const signIn = header.getByRole("link", { name: "Entrar", exact: true });
+  await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
+  await expect(signIn).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Entrar", exact: true })).toHaveCount(0);
+
+  await header.getByRole("link", { name: "Conectar bancos" }).click();
+  await expect(page).toHaveURL(/\/conexoes$/);
+  await expect(signIn).toHaveCount(0);
+  await header.getByRole("link", { name: "Balsave, início" }).click();
+  await signIn.click();
+  await expect(page).toHaveURL(/\/acesso$/);
+  await expect(signIn).toHaveCount(0);
+  await expect(page.getByText("O login ainda não está habilitado nesta instalação.")).toBeVisible();
+  await page.getByRole("link", { name: "Voltar à demonstração", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Painel financeiro", exact: true })).toBeVisible();
+});
+
 test("shows shared navigation and updates spending charts independently", async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on("pageerror", error => pageErrors.push(error));
@@ -53,6 +73,13 @@ test.describe("mobile layout", () => {
 
   test("stacks the cards and allows touching the line chart", async ({ page }) => {
     await page.goto("/");
+    const header = page.getByRole("banner");
+    const logo = await header.getByRole("link", { name: "Balsave, início" }).boundingBox();
+    const signIn = header.getByRole("link", { name: "Entrar", exact: true });
+    await expect(signIn).toBeVisible();
+    const signInBox = await signIn.boundingBox();
+    expect(signInBox?.x).toBeGreaterThan((logo?.x ?? 0) + (logo?.width ?? 0));
+    expect(signInBox?.height).toBeGreaterThanOrEqual(44);
     const accounts = page.getByRole("region", { name: "Saldo em contas", exact: true });
     const cards = page.getByRole("region", { name: "Limite usado nos cartões" });
     await expect(accounts).toBeVisible();

@@ -9,7 +9,9 @@ from contextlib import closing
 from datetime import UTC, datetime
 from decimal import Decimal
 from getpass import GetPassWarning, getpass
+from hashlib import sha256
 from http.client import HTTPException, HTTPSConnection
+from threading import Lock
 from time import monotonic, sleep
 from typing import Any
 from urllib.parse import parse_qs, urlencode
@@ -17,6 +19,9 @@ from uuid import UUID
 
 
 MEU_PLUGGY_CONNECTOR_ID = 200
+API_KEY_TTL_SECONDS = 119 * 60
+_api_key_lock = Lock()
+_cached_api_key: tuple[bytes, str, float] | None = None
 
 
 class PluggyError(Exception):
@@ -26,8 +31,13 @@ class PluggyError(Exception):
 class PluggyAPIError(PluggyError):
     def __init__(self, endpoint: str, status: int, data: dict[str, Any]):
         super().__init__(f"Pluggy returned HTTP {status} at {endpoint}.")
+        self.status = status
         self.code = data.get("codeDescription")
         self.details = data.get("data")
+
+
+class PluggyItemUnavailable(PluggyError):
+    """The requested item is absent or outside the current owner's scope."""
 
 
 def request(
@@ -67,6 +77,8 @@ def request(
         data = None
 
     if status != 200:
+        if status == 401 and api_key is not None:
+            _invalidate_api_key(api_key)
         raise PluggyAPIError(endpoint, status, data if isinstance(data, dict) else {})
     if not isinstance(data, dict):
         raise PluggyError(f"Unexpected response from Pluggy at {endpoint}.")
@@ -125,6 +137,28 @@ def authenticate(client_id: str, client_secret: str) -> str:
     if not isinstance(api_key, str) or not api_key:
         raise PluggyError("Pluggy did not return a valid API key.")
     return api_key
+
+
+def application_api_key(client_id: str, client_secret: str) -> str:
+    """Reuse the server credential with a margin before the provider's two-hour expiry."""
+    global _cached_api_key
+    credentials = sha256(json.dumps([client_id, client_secret]).encode()).digest()
+    with _api_key_lock:
+        now = monotonic()
+        if _cached_api_key is not None:
+            cached_credentials, key, expires_at = _cached_api_key
+            if cached_credentials == credentials and now < expires_at:
+                return key
+        key = authenticate(client_id, client_secret)
+        _cached_api_key = (credentials, key, now + API_KEY_TTL_SECONDS)
+        return key
+
+
+def _invalidate_api_key(rejected_key: str) -> None:
+    global _cached_api_key
+    with _api_key_lock:
+        if _cached_api_key is not None and _cached_api_key[1] == rejected_key:
+            _cached_api_key = None
 
 
 def create_sandbox(api_key: str) -> UUID:
@@ -257,8 +291,15 @@ def inspect_meu_pluggy(item_id: UUID, api_key: str) -> dict[str, Any]:
     }
 
 
-def meu_pluggy_item(item_id: UUID, api_key: str) -> dict[str, Any]:
-    item = request(f"/items/{item_id}", api_key=api_key)
+def meu_pluggy_item(item_id: UUID, api_key: str, *, owner: UUID | None = None) -> dict[str, Any]:
+    try:
+        item = request(f"/items/{item_id}", api_key=api_key)
+    except PluggyAPIError as error:
+        if owner is not None and error.status in (403, 404):
+            raise PluggyItemUnavailable("Connection unavailable.") from None
+        raise
+    if owner is not None and item.get("clientUserId") != str(owner):
+        raise PluggyItemUnavailable("Connection unavailable.")
     connector = item.get("connector")
     if not isinstance(connector, dict) or connector.get("id") != MEU_PLUGGY_CONNECTOR_ID:
         raise PluggyError("Use the itemId of a connection created with the MeuPluggy connector in the Dashboard.")

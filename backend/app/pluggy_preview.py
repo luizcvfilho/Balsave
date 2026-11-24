@@ -1,51 +1,46 @@
 import os
+from collections import OrderedDict
 from copy import deepcopy
-from hashlib import sha256
-from hmac import compare_digest, digest
+from hmac import digest
 from threading import Lock
 from time import monotonic
 from uuid import UUID
+from weakref import WeakValueDictionary
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app import category_catalog, category_rule_store, category_store, database, pluggy
+from app import auth, category_catalog, category_rule_store, category_store, database, pluggy
 from app.category_resolution import apply_categories
 from app.financial_snapshot import load_snapshot
 
 
-def require_preview_service(authorization: str = Header(default="")) -> None:
-    password = os.getenv("BALSAVE_PREVIEW_PASSWORD", "")
-    if len(password) < 32:
-        raise HTTPException(status_code=404)
-    expected = "Bearer " + digest(password.encode(), b"balsave/preview/backend", sha256).hex()
-    if not compare_digest(authorization.encode(), expected.encode()):
-        raise HTTPException(status_code=401, detail="Authentication required")
+router = APIRouter(prefix="/_internal/pluggy", include_in_schema=False)
 
-
-router = APIRouter(
-    prefix="/_internal/pluggy",
-    dependencies=[Depends(require_preview_service)],
-    include_in_schema=False,
-)
-
-snapshot_lock = Lock()
-cached_snapshot: tuple[tuple[UUID, tuple[UUID, ...]], float, dict] | None = None
+snapshot_state_lock = Lock()
+owner_snapshot_locks: WeakValueDictionary[UUID, Lock] = WeakValueDictionary()
+snapshot_cache: OrderedDict[UUID, tuple[tuple[UUID, ...], float, dict]] = OrderedDict()
+MAX_CACHED_SNAPSHOTS = 16
+SNAPSHOT_TTL_SECONDS = 300
+CONNECT_TOKENS_PER_WINDOW = 8
 
 
 class Connection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     itemId: UUID
 
 
 class ReconciliationDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     entryId: str = Field(pattern=r"^[0-9a-f-]{36}\.[0-9a-f-]{36}$")
     counterpartId: str | None = Field(default=None, pattern=r"^[0-9a-f-]{36}\.[0-9a-f-]{36}$")
     remove: bool = False
 
 
 class PositionLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     investmentId: UUID
     accountId: UUID | None = None
 
@@ -70,7 +65,7 @@ def load_owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dic
         "SELECT investment_id, account_id FROM balsave.investment_account_links WHERE user_id = %s", (owner,),
     ).fetchall()}
     key = api_key()
-    catalog, stale = category_catalog.load_catalog(connection, key)
+    catalog, stale = category_catalog.load_catalog(key)
     data = load_snapshot(items, key, decisions=decisions, position_links=links, include_evidence=True, catalog=catalog)
     data["categoryCatalogStale"] = stale
     return apply_owner_categories(connection, owner, data)
@@ -87,29 +82,59 @@ def apply_owner_categories(connection, owner: UUID, data: dict) -> dict:
     return data
 
 
+def owner_snapshot_lock(owner: UUID) -> Lock:
+    with snapshot_state_lock:
+        lock = owner_snapshot_locks.get(owner)
+        if lock is None:
+            lock = Lock()
+            owner_snapshot_locks[owner] = lock
+        return lock
+
+
+def cached_owner_snapshot(owner: UUID, items: tuple[UUID, ...]) -> dict | None:
+    """Read only the current owner's snapshot while holding its lock."""
+    with snapshot_state_lock:
+        cached = snapshot_cache.get(owner)
+        if cached is None:
+            return None
+        cached_items, expiry, data = cached
+        if cached_items != items or monotonic() >= expiry:
+            snapshot_cache.pop(owner)
+            return None
+        snapshot_cache.move_to_end(owner)
+        return data
+
+
 def owner_snapshot(owner: UUID, items: tuple[UUID, ...], connection) -> dict:
-    """Read owned financial facts; callers hold snapshot_lock while using them."""
-    global cached_snapshot
-    now = monotonic()
-    if cached_snapshot and cached_snapshot[0] == (owner, items) and now < cached_snapshot[1]:
-        return apply_owner_categories(connection, owner, cached_snapshot[2])
+    """Read owned financial facts while holding the owner's lock."""
+    cached = cached_owner_snapshot(owner, items)
+    if cached is not None:
+        return apply_owner_categories(connection, owner, cached)
     data = load_owner_snapshot(owner, items, connection)
     if not data["failedConnections"] and not data["failedInvestments"]:
-        cached_snapshot = ((owner, items), monotonic() + 300, data)
+        with snapshot_state_lock:
+            now = monotonic()
+            for user_id, (_, expiry, _) in list(snapshot_cache.items()):
+                if expiry <= now:
+                    snapshot_cache.pop(user_id)
+            snapshot_cache[owner] = (items, now + SNAPSHOT_TTL_SECONDS, data)
+            if len(snapshot_cache) > MAX_CACHED_SNAPSHOTS:
+                snapshot_cache.popitem(last=False)
     return data
 
 
-def owner_and_items() -> tuple[UUID, tuple[UUID, ...]]:
+def invalidate_owner_snapshot(owner: UUID) -> None:
+    with snapshot_state_lock:
+        snapshot_cache.pop(owner, None)
+
+
+def owner_items(owner: UUID) -> tuple[UUID, ...]:
     with database.connect() as connection:
-        owner = connection.execute("SELECT user_id FROM balsave.preview_owner").fetchone()
-        if owner is None:
-            raise psycopg.Error("Missing preview owner")
-        user_id = owner[0]
         items = connection.execute(
             "SELECT item_id FROM balsave.pluggy_connections WHERE user_id = %s ORDER BY created_at, item_id",
-            (user_id,),
+            (owner,),
         ).fetchall()
-    return user_id, tuple(item[0] for item in items)
+    return tuple(item[0] for item in items)
 
 
 def api_key() -> str:
@@ -117,13 +142,14 @@ def api_key() -> str:
     client_secret = os.getenv("PLUGGY_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
         raise pluggy.PluggyError("Pluggy application credentials are missing.")
-    return pluggy.authenticate(client_id, client_secret)
+    return pluggy.application_api_key(client_id, client_secret)
 
 
 @router.post("/token")
-def create_token() -> JSONResponse:
+def create_token(secret: auth.InternalSecret, owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
-        owner, _ = owner_and_items()
+        limit_key = digest(secret, f"pluggy/connect-token/{owner}".encode(), "sha256")
+        auth.enforce_rate_limits((limit_key, CONNECT_TOKENS_PER_WINDOW), detail="Too many Connect token requests")
         token = pluggy.request(
             "/connect_token", api_key=api_key(), body={"options": {"clientUserId": str(owner)}},
         ).get("accessToken")
@@ -135,14 +161,11 @@ def create_token() -> JSONResponse:
 
 
 @router.post("/connections")
-def save_connection(payload: Connection) -> JSONResponse:
+def save_connection(payload: Connection, owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
-        owner, items = owner_and_items()
-        if payload.itemId in items:
+        if payload.itemId in owner_items(owner):
             return response({"saved": True})
-        item = pluggy.meu_pluggy_item(payload.itemId, api_key())
-        if item.get("clientUserId") != str(owner):
-            raise HTTPException(status_code=403, detail="Connection belongs to a different user")
+        pluggy.meu_pluggy_item(payload.itemId, api_key(), owner=owner)
         with database.connect() as connection:
             connection.execute(
                 """
@@ -151,38 +174,47 @@ def save_connection(payload: Connection) -> JSONResponse:
                 """,
                 (payload.itemId, owner),
             )
+            saved = connection.execute(
+                "SELECT 1 FROM balsave.pluggy_connections WHERE item_id = %s AND user_id = %s",
+                (payload.itemId, owner),
+            ).fetchone()
+            if saved is None:
+                raise HTTPException(status_code=404, detail="Connection unavailable")
+    except pluggy.PluggyItemUnavailable:
+        raise HTTPException(status_code=404, detail="Connection unavailable") from None
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not save Pluggy connection") from None
     return response({"saved": True})
 
 
 @router.get("/snapshot")
-def snapshot() -> JSONResponse:
+def snapshot(owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
-        owner, items = owner_and_items()
+        items = owner_items(owner)
         if not items:
             return response({"connected": False})
-        with snapshot_lock:
+        with owner_snapshot_lock(owner):
             with database.connect() as connection:
                 data = owner_snapshot(owner, items, connection)
+            return response({"connected": True, "data": public_snapshot(data)})
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not load financial data") from None
-    return response({"connected": True, "data": public_snapshot(data)})
 
 
 @router.post("/reconciliation")
-def reconcile_transfer(payload: ReconciliationDecision) -> JSONResponse:
-    global cached_snapshot
+def reconcile_transfer(payload: ReconciliationDecision, owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
-        owner, items = owner_and_items()
-        with snapshot_lock, database.connect() as connection:
-            connection.execute("SELECT user_id FROM balsave.preview_owner WHERE user_id = %s FOR UPDATE", (owner,)).fetchone()
+        with owner_snapshot_lock(owner), database.connect() as connection:
+            lock_reconciliation(connection, owner)
             if payload.remove:
                 connection.execute(
                     "DELETE FROM balsave.reconciliation_decisions WHERE user_id = %s AND (entry_id = %s OR counterpart_id = %s)",
                     (owner, payload.entryId, payload.entryId),
                 )
             else:
+                items = owner_items(owner)
+                if not items:
+                    raise HTTPException(status_code=409, detail="The reconciliation candidate is no longer available")
                 data = load_owner_snapshot(owner, items, connection)
                 chosen = {"entryId": payload.entryId, "counterpartId": payload.counterpartId}
                 reverse = {"entryId": payload.counterpartId, "counterpartId": payload.entryId}
@@ -199,19 +231,20 @@ def reconcile_transfer(payload: ReconciliationDecision) -> JSONResponse:
                         "INSERT INTO balsave.reconciliation_decisions (user_id, entry_id, counterpart_id, fingerprint) VALUES (%s, %s, %s, %s)",
                         (owner, entry_id, counterpart, entries[entry_id]["_fingerprint"]),
                     )
-            cached_snapshot = None
+            invalidate_owner_snapshot(owner)
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not save reconciliation") from None
     return response({"saved": True})
 
 
 @router.post("/position-links")
-def link_position(payload: PositionLink) -> JSONResponse:
-    global cached_snapshot
+def link_position(payload: PositionLink, owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
-        owner, items = owner_and_items()
-        with snapshot_lock, database.connect() as connection:
-            connection.execute("SELECT user_id FROM balsave.preview_owner WHERE user_id = %s FOR UPDATE", (owner,)).fetchone()
+        items = owner_items(owner)
+        if not items:
+            raise HTTPException(status_code=403, detail="The position is not available for this connection")
+        with owner_snapshot_lock(owner), database.connect() as connection:
+            lock_reconciliation(connection, owner)
             data = load_owner_snapshot(owner, items, connection)
             investments = {position["id"]: position for position in data["investments"]}
             accounts = {account["id"]: account for account in data["accounts"]}
@@ -224,7 +257,13 @@ def link_position(payload: PositionLink) -> JSONResponse:
                 ON CONFLICT (user_id, investment_id) DO UPDATE SET account_id = EXCLUDED.account_id""",
                 (owner, payload.investmentId, payload.accountId),
             )
-            cached_snapshot = None
+            invalidate_owner_snapshot(owner)
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not save investment balance settings") from None
     return response({"saved": True})
+
+
+def lock_reconciliation(connection, owner: UUID) -> None:
+    connection.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"balsave:reconciliation:{owner}",),
+    )

@@ -1,7 +1,7 @@
 import psycopg
 from fastapi import FastAPI, HTTPException
 
-from app import category_api, category_rule_api, database, pluggy_preview
+from app import auth, category_api, category_rule_api, database, pluggy_preview
 
 app = FastAPI(
     title="Balsave API",
@@ -9,6 +9,7 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
     redoc_url=None,
 )
+app.include_router(auth.router)
 app.include_router(pluggy_preview.router)
 app.include_router(category_api.router)
 app.include_router(category_rule_api.router)

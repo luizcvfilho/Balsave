@@ -1,5 +1,17 @@
+{
+	servers {
+		trusted_proxies static {$BALSAVE_TRUSTED_PROXY_CIDRS}
+		trusted_proxies_strict
+	}
+}
+
 :8080 {
 	encode zstd gzip
+
+	@internal path /_internal /_internal/*
+	handle @internal {
+		respond 404
+	}
 
 	@api path /api /api/*
 	handle @api {
@@ -7,6 +19,8 @@
 	}
 
 	handle {
-		reverse_proxy frontend:3000
+		reverse_proxy frontend:3000 {
+			header_up X-Balsave-Client-IP {client_ip}
+		}
 	}
 }

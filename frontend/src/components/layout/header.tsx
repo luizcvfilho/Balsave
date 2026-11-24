@@ -1,13 +1,19 @@
 import AppBar from "@mui/material/AppBar";
 import Container from "@mui/material/Container";
+import Stack from "@mui/material/Stack";
 import Toolbar from "@mui/material/Toolbar";
 import Image from "next/image";
 import Link from "next/link";
 import logoDark from "../../../../assets/balsave-logo-dark.svg";
 import logoLight from "../../../../assets/balsave-logo-light.svg";
-import { signOut } from "../preview/actions";
+import { HomeSignInLink } from "./home-sign-in-link";
+import { SignOutForm } from "./sign-out-form";
 
-export function Header({ signedIn }: { signedIn: boolean }) {
+export function Header({ signedIn, showNavigation, showHomeSignIn }: {
+  signedIn: boolean;
+  showNavigation: boolean;
+  showHomeSignIn: boolean;
+}) {
   return (
     <AppBar
       color="transparent"
@@ -23,15 +29,16 @@ export function Header({ signedIn }: { signedIn: boolean }) {
               <Image src={logoLight} alt="Balsave" width={150} height={50} />
             </picture>
           </Link>
-          <div className="report-filters">
-            <Link href="/categorias" className="report-link report-action">Categorias</Link>
-            <Link href="/conexoes" className="report-link report-action">Conectar bancos</Link>
-            {signedIn && (
-              <form action={signOut}>
-                <button className="report-button" type="submit">Sair</button>
-              </form>
+          <Stack direction="row" spacing={{ xs: 1, sm: 2 }} useFlexGap sx={{ alignItems: "center", minWidth: 0 }}>
+            {showNavigation && (
+              <nav aria-label="Navegação principal" className="report-filters">
+                <Link href="/categorias" className="report-link report-action">Categorias</Link>
+                <Link href="/conexoes" className="report-link report-action">Conectar bancos</Link>
+                {signedIn && <SignOutForm />}
+              </nav>
             )}
-          </div>
+            {showHomeSignIn && <HomeSignInLink />}
+          </Stack>
         </Toolbar>
       </Container>
     </AppBar>

@@ -4,15 +4,23 @@
 
 | Component | Implementation |
 | --- | --- |
-| Web | Next.js App Router, React, TypeScript, Material UI, and Tailwind CSS provide a responsive interface. Shared assets carry the Balsave theme and brand. |
-| API | FastAPI serves health and readiness checks and handles the authenticated local Pluggy preview, including financial snapshot calculations and owner preferences. Next.js reads preview data through server-side requests. |
-| Proxy | Caddy publishes the single host port, bound to `127.0.0.1:8080` by default. It serves Next.js and proxies `/api` and `/api/*` to FastAPI on the same origin. Requests to FastAPI's `/_internal/pluggy` routes come from the Next.js server over the Compose network. |
-| Database | PostgreSQL runs on a dedicated internal Compose network with the migration job and FastAPI. Its port is available inside that network. The named `postgres_data` volume persists across container recreation and `make down`. |
-| Migrations | Compose waits for PostgreSQL to accept the application role's credentials before running the one-shot Alembic job. FastAPI starts after the job succeeds. Alembic runs as `postgres`. FastAPI connects as `balsave_app`, a restricted login with per-table grants and no schema ownership or schema creation privilege. Caddy starts after Next.js and FastAPI pass their health checks. |
+| Web | Next.js App Router, React, TypeScript, Material UI, and Tailwind CSS provide a responsive interface. Shared assets carry the Balsave theme and brand. Better Auth runs in Next.js Server Actions. |
+| API | FastAPI serves health and readiness checks, checks session ownership, and handles Pluggy snapshots and owner preferences. Next.js accesses private APIs through server-side requests. |
+| Proxy | Caddy publishes the single host port, bound to `127.0.0.1:8080` by default. It serves Next.js, proxies `/api` and `/api/*` to FastAPI, and blocks browser requests to `/_internal/*`. It overwrites the client-IP header used by the authentication limiter using its trusted-proxy configuration. |
+| Database | PostgreSQL runs on a dedicated internal Compose network with the migration job, Next.js, and FastAPI. Its port is available inside that network. The named `postgres_data` volume persists across container recreation and `make down`. |
+| Migrations | Compose waits for PostgreSQL to accept the application role's credentials before running the one-shot Alembic job. Next.js and FastAPI start after the job succeeds. Alembic runs as `postgres`. FastAPI connects as `balsave_app`, a restricted login with per-table grants and no schema ownership or schema creation privilege. Caddy starts after Next.js and FastAPI pass their health checks. |
 
-In demo mode, Next.js supplies the checked-in fixture independently of PostgreSQL. Demo receipt annotations use a browser-local storage key reserved for those fixtures. The regular startup also migrates the empty database, including the preview owner record, so the same Compose stack can support the authenticated preview when configured.
+In demo mode, Next.js supplies the checked-in fixture independently of PostgreSQL. Receipt annotations use browser-local storage only for those fixtures.
 
-The Pluggy preview supports one local owner. The frontend validates a signed, secure, HTTP-only session cookie and authenticates its FastAPI requests separately. Pluggy credentials stay in the API service. FastAPI scopes stored connections and preferences to the preview owner. It retrieves available financial history from the provider and caches snapshots in process memory. PostgreSQL stores connection references and user preferences, including categories, personal rules, and reconciliation decisions.
+## Financial control milestone
+
+Better Auth signs in accounts using a unique normalized email and a salted scrypt password hash. Server Actions call Better Auth's server API. The browser presents a signed session token in a `Secure`, `HttpOnly`, `SameSite=Strict` host-only cookie. Better Auth persists the token in PostgreSQL and enforces an eight-hour lifetime. Private backend requests carry the separate internal service secret and the verified session ID. FastAPI checks the session's expiration and its financial owner on every request. The FastAPI database role can read only the identity and session columns required for this lookup.
+
+Every browser mutation verifies its `Origin` against the configured origin. Private pages carry a session-specific HMAC that Next.js checks before forwarding an action. Browsers with open tabs refresh their view when a tab signals a new session. Registration and login use shared PostgreSQL rate limits scoped to the normalized email and client IP group. The limiter receives the email and operation. Better Auth handles passwords inside Next.js.
+
+FastAPI derives the owner ID from the session for each private route. It retrieves Pluggy history using that owner's connections and stores snapshots in a bounded process cache keyed by owner and connection set. The snapshot lock is scoped to the owner so synchronization cannot hold up another owner's requests. The Pluggy API key is held server-side and reused across calls until refresh. Connect Token issuance has a PostgreSQL-backed quota per owner. Reports, including refund views, use the owner's snapshot, fetched without shared frontend caching. PostgreSQL stores owner-scoped connection references, categories, rules and reconciliation decisions. The ledger schema also enforces ownership on both sides of a refund link.
+
+Migration `0008` introduces a dedicated identity schema and database role. Registration creates a financial owner and Better Auth credentials in a single transaction. PostgreSQL assigns the owner through an insert trigger. The identity role cannot write owner mappings or access financial records. The administrator can [link a legacy login](../README.md#migrate-existing-logins) to its existing owner ID and preserve its scrypt hash. The previous credential tables are restricted to database administrators.
 
 ## Amounts and reporting dates
 

@@ -5,7 +5,8 @@ import symbolLight from "../../../assets/balsave-symbol-light.svg";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/playfair-display/wght.css";
 import { Header } from "../components/layout/header";
-import { hasPreviewSession } from "../data/preview-session";
+import { SessionViewProvider } from "../components/layout/session-view-provider";
+import { authEnabled, sessionView } from "../data/session";
 import { BalsaveThemeProvider } from "../theme/theme-provider";
 import "./globals.css";
 
@@ -21,14 +22,26 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const signedIn = await hasPreviewSession();
+  const { status, viewKey } = await sessionView();
+  const configured = authEnabled();
+  const content = <>
+    <Header
+      signedIn={status === "active"}
+      showNavigation={status !== "unavailable"}
+      showHomeSignIn={status === "anonymous"}
+    />
+    {children}
+  </>;
   return (
     <html lang="pt-BR">
       <body>
         <AppRouterCacheProvider options={{ enableCssLayer: true }}>
           <BalsaveThemeProvider>
-            <Header signedIn={signedIn} />
-            {children}
+            {configured ? (
+              <SessionViewProvider key={viewKey} viewKey={viewKey} sync={status !== "unavailable"}>
+                {content}
+              </SessionViewProvider>
+            ) : content}
           </BalsaveThemeProvider>
         </AppRouterCacheProvider>
       </body>

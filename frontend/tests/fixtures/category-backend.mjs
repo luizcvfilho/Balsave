@@ -1,8 +1,16 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
 import { createServer } from "node:http";
+import { Pool } from "pg";
 
 const password = "balsave-category-browser-tests-only-password";
-const authorization = `Bearer ${createHmac("sha256", password).update("balsave/preview/backend").digest("hex")}`;
+const internalSecret = "balsave-browser-tests-only-internal-secret";
+const emailDomain = "@category-e2e.example.test";
+const connectedUser = `browser-owner${emailDomain}`;
+const pool = new Pool({ connectionString: process.env.BALSAVE_TEST_DATABASE_URL });
+const salt = randomBytes(16);
+const key = scryptSync(password, salt, 32, { N: 65536, r: 8, p: 2, maxmem: 80 * 2 ** 20 });
+const legacyHash = `scrypt-v1$${salt.toString("hex")}$${key.toString("hex")}`;
+let connectedOwner;
 const accountId = "10000000-0000-0000-0000-000000000001";
 const transactionId = `${accountId}.20000000-0000-0000-0000-000000000001`;
 const initialCategories = [
@@ -15,14 +23,37 @@ let rules;
 let snapshotUnavailable;
 let assignmentConflict;
 
-function reset() {
+async function reset() {
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    const removed = await connection.query(
+      'DELETE FROM balsave_identity."user" WHERE email LIKE $1 RETURNING owner_id', [`%${emailDomain}`],
+    );
+    await connection.query("DELETE FROM balsave.users WHERE id = ANY($1::uuid[])", [removed.rows.map(row => row.owner_id)]);
+    const { rows: [identity] } = await connection.query(
+      'INSERT INTO balsave_identity."user" (email, name) VALUES ($1, $2) RETURNING id, owner_id',
+      [connectedUser, "Browser test owner"],
+    );
+    await connection.query(
+      `INSERT INTO balsave_identity.account ("accountId", "providerId", "userId", password)
+       VALUES ($1::uuid::text, 'credential', $1::uuid, $2)`, [identity.id, legacyHash],
+    );
+    await connection.query("COMMIT");
+    connectedOwner = identity.owner_id;
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
   categories = structuredClone(initialCategories);
   assignment = undefined;
   rules = [];
   snapshotUnavailable = false;
   assignmentConflict = false;
 }
-reset();
+await reset();
 
 function ruleMatches(rule) {
   if (!rule.enabled || (rule.accountId && rule.accountId !== accountId) || (rule.startsOn && rule.startsOn > "2026-11-15")) return false;
@@ -86,7 +117,7 @@ function respond(response, status, body) {
 createServer(async (request, response) => {
   if (request.url === "/health") return respond(response, 200, { status: "ok" });
   if (request.url === "/reset" && request.method === "POST") {
-    reset();
+    await reset();
     return respond(response, 200, { reset: true });
   }
   let body = {};
@@ -101,8 +132,27 @@ createServer(async (request, response) => {
     if (body.assignment !== undefined) assignment = body.assignment;
     return respond(response, 200, { saved: true });
   }
-  if (request.headers.authorization !== authorization) return respond(response, 401, { detail: "Authentication required" });
+  if (request.headers["x-balsave-internal"] !== internalSecret) return respond(response, 403, { detail: "Internal access required" });
+  if (request.url === "/_internal/auth/attempt") {
+    if (body.password !== undefined || !body.email?.endsWith(emailDomain)) {
+      return respond(response, 422, { detail: "Invalid test authentication attempt" });
+    }
+    response.writeHead(204).end();
+    return;
+  }
+  const id = /^Bearer ([a-f0-9-]{36})$/.exec(request.headers.authorization ?? "")?.[1];
+  if (!id) return respond(response, 401, { detail: "Authentication required" });
+  const { rows: [session] } = await pool.query(
+    `SELECT identity.owner_id FROM balsave_identity.session AS session
+     JOIN balsave_identity."user" AS identity ON identity.id = session."userId"
+     WHERE session.id = $1 AND session."expiresAt" > now()`, [id],
+  );
+  if (!session) return respond(response, 401, { detail: "Authentication required" });
   const path = request.url?.replace("/_internal/pluggy/", "");
+  if (session.owner_id !== connectedOwner) {
+    if (path === "snapshot") return respond(response, 200, { connected: false });
+    return respond(response, 404, { detail: "Resource unavailable" });
+  }
   if (path === "snapshot" && request.method === "GET") {
     return snapshotUnavailable ? respond(response, 503, { detail: "Provider unavailable" }) : respond(response, 200, snapshot());
   }

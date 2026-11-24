@@ -11,13 +11,11 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
 
-from app import category_rule_store, category_rules, category_store, database, pluggy
+from app import auth, category_rule_store, category_rules, category_store, database, pluggy
 from app import pluggy_preview as preview
 
 
-router = APIRouter(
-    prefix="/_internal/pluggy", dependencies=[Depends(preview.require_preview_service)], include_in_schema=False,
-)
+router = APIRouter(prefix="/_internal/pluggy", include_in_schema=False)
 
 
 class RuleDraft(BaseModel):
@@ -76,11 +74,11 @@ def _today():
 
 
 @router.post("/category-rule-preview")
-def preview_rule(payload: RuleDraft):
+def preview_rule(payload: RuleDraft, owner: UUID = Depends(auth.require_user)):
     try:
-        owner, items = preview.owner_and_items()
+        items = preview.owner_items(owner)
         draft = payload.model_dump(mode="json")
-        with preview.snapshot_lock, database.connect() as connection:
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             data, categories, assignments, rules = _context(connection, owner, items, draft)
             result = category_rules.preview_rule(data, categories, assignments, rules, draft, _today())
     except category_store.CategoryNotFound:
@@ -93,11 +91,11 @@ def preview_rule(payload: RuleDraft):
 
 
 @router.post("/category-rule-save")
-def save_rule(payload: RuleSave):
+def save_rule(payload: RuleSave, owner: UUID = Depends(auth.require_user)):
     try:
-        owner, items = preview.owner_and_items()
+        items = preview.owner_items(owner)
         draft = payload.model_dump(mode="json", exclude={"previewFingerprint"})
-        with preview.snapshot_lock, database.connect() as connection:
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             data, categories, assignments, rules = _context(connection, owner, items, draft)
             today = _today()
             result = category_rules.preview_rule(data, categories, assignments, rules, draft, today)
@@ -115,12 +113,11 @@ def save_rule(payload: RuleSave):
 
 
 @router.post("/category-rule-update")
-def update_rule(payload: RuleUpdate):
+def update_rule(payload: RuleUpdate, owner: UUID = Depends(auth.require_user)):
     if (payload.remove and payload.enabled is not None) or (not payload.remove and payload.enabled is not False):
         raise HTTPException(status_code=422, detail="Disable or remove the rule; enabling requires a new preview")
     try:
-        owner, _ = preview.owner_and_items()
-        with preview.snapshot_lock, database.connect() as connection:
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
             if payload.remove:
                 category_rule_store.delete_rule(connection, owner, payload.ruleId)
             else:

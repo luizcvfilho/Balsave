@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useState } from "react";
+import { useSessionViewKey } from "../layout/session-view-provider";
 import { registerConnection, startConnection } from "./actions";
 
 type WidgetOptions = {
@@ -23,6 +24,7 @@ declare global {
 }
 
 export function ConnectButton() {
+  const viewKey = useSessionViewKey();
   const [ready, setReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -33,7 +35,12 @@ export function ConnectButton() {
     setOpening(true);
     setMessage("Abrindo o Meu Pluggy…");
     try {
-      const session = await startConnection();
+      const session = await startConnection(viewKey);
+      if (session?.rateLimited) {
+        setOpening(false);
+        setMessage("Limite de tentativas de conexão atingido. Aguarde alguns minutos e tente novamente.");
+        return;
+      }
       if (!session || !window.PluggyConnect) throw new Error("Could not initialize Pluggy Connect.");
       const widget = new window.PluggyConnect({
         connectToken: session.accessToken,
@@ -45,7 +52,7 @@ export function ConnectButton() {
           setPending(count => count + 1);
           setMessage("Salvando conexão…");
           try {
-            if (!await registerConnection(item.id)) throw new Error("Could not register the connection.");
+            if (!await registerConnection(viewKey, item.id)) throw new Error("Could not register the connection.");
             setSaved(true);
             setMessage("Conexão adicionada.");
           } catch {

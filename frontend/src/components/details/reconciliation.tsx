@@ -5,9 +5,11 @@ import { useState, useTransition } from "react";
 import { useFinancialReports } from "../../data/financial-reports";
 import { formatAvailableMoney, formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
 import { SectionCard } from "../cards/section-card";
+import { useSessionViewKey } from "../layout/session-view-provider";
 import { saveInvestmentPosition, saveReconciliation } from "../preview/actions";
 
 export function Reconciliation() {
+  const viewKey = useSessionViewKey();
   const { accounts, investments, reportedTransactions, reconciliationCandidates = [], transactionSource, live } = useFinancialReports();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -40,7 +42,7 @@ export function Reconciliation() {
           <p className="report-muted">{investment.bank} · Posição em {formatNumericDate(investment.asOf)}</p>
           <form className="report-filters" action={form => {
             const accountId = String(form.get("accountId") ?? "") || null;
-            save(() => saveInvestmentPosition({ investmentId: investment.id, accountId }));
+            save(() => saveInvestmentPosition(viewKey, { investmentId: investment.id, accountId }));
           }}>
             <label className="report-field">
               <span>Composição do saldo de {investment.name}</span>
@@ -68,7 +70,7 @@ export function Reconciliation() {
               <p className="report-muted">{transactionSource(entry)} · {formatNumericDate(entry.date)}</p>
             </div>)}
             {!second && <p className="report-muted">Confirme apenas se esta movimentação está dentro do investimento automático já incluído no saldo da conta.</p>}
-            <button type="button" className="report-button" disabled={pending || !live} onClick={() => save(() => saveReconciliation(candidate))}>
+            <button type="button" className="report-button" disabled={pending || !live} onClick={() => save(() => saveReconciliation(viewKey, candidate))}>
               {second ? "Confirmar transferência interna" : "Confirmar movimentação já incluída no saldo"}
             </button>
           </li>;
@@ -80,7 +82,7 @@ export function Reconciliation() {
       <ul className="report-list">{confirmed.slice(0, limit).map(entry => <li className="report-list-item" key={entry.id}>
         <div className="report-group"><strong>{entry.name}</strong><span>{formatMoney(entry.amountCents)}</span></div>
         <p className="report-muted">{transactionSource(entry)} · {formatNumericDate(entry.date)}</p>
-        <button type="button" className="report-button" disabled={pending} onClick={() => save(() => saveReconciliation({ entryId: entry.id, counterpartId: entry.counterpartId ?? null, remove: true }))}>
+        <button type="button" className="report-button" disabled={pending} onClick={() => save(() => saveReconciliation(viewKey, { entryId: entry.id, counterpartId: entry.counterpartId ?? null, remove: true }))}>
           Desfazer confirmação
         </button>
       </li>)}</ul>

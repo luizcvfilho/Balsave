@@ -1,14 +1,206 @@
 import { expect, test } from "@playwright/test";
 
+const emailDomain = "@category-e2e.example.test";
+const password = "balsave-category-browser-tests-only-password";
+
+for (const testPassword of ["x", "Ab#ç💠".repeat(1024)]) {
+  test(`accepts a password of ${Array.from(testPassword).length} characters`, async ({ page, request }) => {
+    await request.post("http://127.0.0.1:8106/reset");
+    await page.goto("/acesso?modo=cadastro");
+    await page.getByLabel("Nome", { exact: true }).fill("Teste de senha");
+    await page.getByLabel("E-mail").fill(`teste-senha${emailDomain}`);
+    await page.getByLabel("Senha", { exact: true }).fill(testPassword);
+    await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Sair", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+    await page.getByLabel("E-mail").fill(`teste-senha${emailDomain}`);
+    await page.getByLabel("Senha", { exact: true }).fill(testPassword);
+    await page.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+  });
+}
+
+test("keeps categories and bank connections available from the demo header", async ({ page }) => {
+  await page.goto("/");
+  const header = page.getByRole("banner");
+  const signIn = header.getByRole("link", { name: "Entrar", exact: true });
+  await expect(signIn).toBeVisible();
+  await header.getByRole("link", { name: "Categorias", exact: true }).click();
+  await expect(page).toHaveURL(/\/categorias$/);
+  await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Criar categoria", exact: true })).toBeDisabled();
+  await expect(signIn).toHaveCount(0);
+
+  await header.getByRole("link", { name: "Conectar bancos", exact: true }).click();
+  await expect(page).toHaveURL(/\/conexoes$/);
+  await expect(page.getByRole("heading", { name: "Conexões bancárias", exact: true })).toBeVisible();
+  await expect(signIn).toHaveCount(0);
+  await page.getByRole("link", { name: "Acessar minha conta", exact: true }).click();
+  await expect(page).toHaveURL(/\/acesso$/);
+});
+
+test("registers, signs out and keeps two browser sessions independent", async ({ context, page, request }) => {
+  await request.post("http://127.0.0.1:8106/reset");
+  await page.goto("/");
+  await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saldo em contas", exact: true })).toBeVisible();
+  const signIn = page.getByRole("banner").getByRole("link", { name: "Entrar", exact: true });
+  await signIn.click();
+  await expect(page).toHaveURL(/\/acesso$/);
+  await expect(signIn).toHaveCount(0);
+  await page.getByRole("link", { name: "Criar conta", exact: true }).click();
+  await expect(page).toHaveURL(/\/acesso\?modo=cadastro$/);
+  await page.getByLabel("Nome", { exact: true }).fill("Nova conta");
+  await page.getByLabel("E-mail").fill(`BROWSER-OWNER${emailDomain}`);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Criar conta" }).getByRole("alert"))
+    .toHaveText("Este e-mail já está cadastrado.");
+  await page.getByLabel("Nome", { exact: true }).fill("Nova conta");
+  await page.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Criar conta", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+  const session = (await context.cookies()).find(cookie => cookie.name === "__Host-balsave-session");
+  expect(session).toMatchObject({ httpOnly: true, secure: true, sameSite: "Strict", path: "/" });
+  expect(await page.evaluate(() => document.cookie)).not.toContain("__Host-balsave-session");
+
+  const otherContext = await context.browser()?.newContext();
+  if (!otherContext) throw new Error("Expected an active browser");
+  try {
+    const otherPage = await otherContext.newPage();
+    await otherPage.goto(new URL("/", page.url()).href);
+    await otherPage.getByRole("banner").getByRole("link", { name: "Entrar", exact: true }).click();
+    await expect(otherPage).toHaveURL(/\/acesso$/);
+    await otherPage.getByLabel("E-mail").fill(`BROWSER-OWNER${emailDomain}`);
+    await otherPage.getByLabel("Senha", { exact: true }).fill(password);
+    await otherPage.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(otherPage.getByRole("heading", { name: "Saldo em contas", exact: true })).toBeVisible();
+    await expect(otherPage.getByText("Dados do Meu Pluggy", { exact: true })).toBeVisible();
+    await expect(otherPage.getByRole("link", { name: "Entrar", exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Sair", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+    await page.goto("/lancamentos");
+    await expect(page).toHaveURL(/\/acesso$/);
+    await otherPage.reload();
+    await expect(otherPage.getByRole("heading", { name: "Saldo em contas", exact: true })).toBeVisible();
+
+    await page.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
+    await page.getByLabel("Senha", { exact: true }).fill("incorrect-password");
+    await page.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Acesse sua conta" }).getByRole("alert"))
+      .toHaveText("E-mail ou senha inválidos.");
+    await page.getByLabel("Senha", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+
+    await otherPage.goto(new URL("/lancamentos", page.url()).href);
+    const privateEntry = otherPage.getByRole("link", { name: "Loja de equipamentos", exact: true });
+    await expect(privateEntry).toBeVisible();
+    await otherPage.getByRole("link", { name: "Categorias", exact: true }).click();
+    await expect(otherPage).toHaveURL(/\/categorias$/);
+    await otherPage.getByRole("button", { name: "Sair", exact: true }).click();
+    await expect(otherPage.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+    await otherPage.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
+    await otherPage.getByLabel("Senha", { exact: true }).fill(password);
+    await otherPage.getByRole("button", { name: "Entrar", exact: true }).click();
+    await expect(otherPage.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+    await otherPage.goBack();
+    await expect(otherPage).toHaveURL(/\/lancamentos$/);
+    await expect(otherPage.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+    await expect(privateEntry).toHaveCount(0);
+  } finally {
+    await otherContext.close();
+  }
+});
+
 test.describe("authenticated category management", () => {
   test.skip(!process.env.BALSAVE_CATEGORY_E2E, "Run with the dedicated category browser configuration.");
 
   test.beforeEach(async ({ page, request }) => {
     await request.post("http://127.0.0.1:8106/reset");
     await page.goto("/acesso");
-    await page.getByLabel("Senha de acesso").fill("balsave-category-browser-tests-only-password");
+    await page.getByLabel("E-mail").fill(`browser-owner${emailDomain}`);
+    await page.getByLabel("Senha", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Entrar", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Acesse seu painel" })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("refreshes another tab when the signed-in account changes", async ({ page, context }) => {
+    await page.goto("/lancamentos");
+    const privateEntry = page.getByRole("link", { name: "Loja de equipamentos", exact: true });
+    await expect(privateEntry).toBeVisible();
+    const other = await context.newPage();
+    try {
+      await other.goto("/");
+      await other.getByRole("button", { name: "Sair", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+      await expect(privateEntry).toHaveCount(0);
+
+      await other.goto("/acesso?modo=cadastro");
+      await other.getByLabel("Nome", { exact: true }).fill("Nova conta");
+      await other.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
+      await other.getByLabel("Senha", { exact: true }).fill(password);
+      await other.getByRole("button", { name: "Criar conta", exact: true }).click();
+      await expect(other.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+      await expect(privateEntry).toHaveCount(0);
+    } finally {
+      await other.close();
+    }
+  });
+
+  test("rejects an old tab's category and logout actions after an account switch", async ({ page, context }) => {
+    await page.addInitScript(() => Object.defineProperty(window, "BroadcastChannel", { value: undefined }));
+    await page.goto("/categorias");
+    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    await creator.getByLabel("Nome da categoria", { exact: true }).fill("Categoria da sessão anterior");
+    const other = await context.newPage();
+    try {
+      await other.goto("/");
+      await other.getByRole("button", { name: "Sair", exact: true }).click();
+      await expect(other.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
+      await other.goto("/acesso?modo=cadastro");
+      await other.getByLabel("Nome", { exact: true }).fill("Nova conta");
+      await other.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
+      await other.getByLabel("Senha", { exact: true }).fill(password);
+      await other.getByRole("button", { name: "Criar conta", exact: true }).click();
+      await expect(other.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+
+      const sessionChanged = "Sua sessão mudou. Recarregue a página e tente novamente.";
+      await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
+      await expect(creator.getByRole("alert")).toHaveText(sessionChanged);
+      const navigation = page.getByRole("navigation", { name: "Navegação principal" });
+      await navigation.getByRole("button", { name: "Sair", exact: true }).click();
+      await expect(navigation.getByRole("alert")).toHaveText(sessionChanged);
+      await other.reload();
+      await expect(other.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
+    } finally {
+      await other.close();
+    }
+  });
+
+  test("rejects a category mutation with an untrusted origin", async ({ page }) => {
+    await page.goto("/categorias");
+    await page.route("**/categorias", async route => {
+      const outgoing = route.request();
+      if (outgoing.method() !== "POST") return route.continue();
+      const origin = new URL(outgoing.url());
+      origin.protocol = "https:";
+      const response = await route.fetch({ headers: { ...await outgoing.allHeaders(), origin: origin.origin } });
+      await route.fulfill({ response });
+    });
+    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    await creator.getByLabel("Nome da categoria", { exact: true }).fill("Categoria fora da origem");
+    const post = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/categorias"));
+    await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
+    await post;
+    await page.unroute("**/categorias");
+    await page.reload();
+    await expect(page.getByLabel("Nome de Categoria fora da origem", { exact: true })).toHaveCount(0);
   });
 
   test("creates, renames and archives personal categories while preserving a purchase choice", async ({ page }) => {

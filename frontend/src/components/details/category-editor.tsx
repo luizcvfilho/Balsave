@@ -8,6 +8,7 @@ import type { Expense } from "../../lib/finance";
 import { transactionCategory } from "../../lib/finance";
 import { CategoryRuleEditor } from "./category-rule-editor";
 import { SectionCard } from "../cards/section-card";
+import { useSessionViewKey } from "../layout/session-view-provider";
 import { createCategory, saveTransactionCategory } from "../preview/category-actions";
 
 const sourceLabels = {
@@ -18,6 +19,7 @@ const sourceLabels = {
 };
 
 export function CategoryEditor({ transaction }: { transaction: Expense }) {
+  const viewKey = useSessionViewKey();
   const { categories = [], live, accounts, cards } = useFinancialReports();
   const [draftCategory, setDraftCategory] = useState<string>();
   const [search, setSearch] = useState("");
@@ -34,7 +36,7 @@ export function CategoryEditor({ transaction }: { transaction: Expense }) {
 
   function save(categoryId: string | null) {
     startTransition(async () => {
-      const result = await saveTransactionCategory({ entryId: transaction.id, categoryId });
+      const result = await saveTransactionCategory(viewKey, { entryId: transaction.id, categoryId });
       setError(!result.ok);
       setMessage(result.ok ? categoryId === null ? "Classificação automática restaurada." : "Categoria salva." : result.message);
       if (result.ok) setDraftCategory(undefined);
@@ -77,7 +79,7 @@ export function CategoryEditor({ transaction }: { transaction: Expense }) {
         <Link href="/categorias" className="report-link report-action">Gerenciar categorias</Link>
       </div>
       {creating && <form action={() => startTransition(async () => {
-        const result = await createCategory({ name });
+        const result = await createCategory(viewKey, { name });
         setError(!result.ok);
         if (result.ok) {
           setDraftCategory(result.category.id);

@@ -2,6 +2,7 @@
 
 import { useId, useState, useTransition } from "react";
 import type { CategoryAccountOption, CategoryRule, LocalCategory } from "../../data/financial-data";
+import { useSessionViewKey } from "../layout/session-view-provider";
 import { type CategoryRuleDraft, type CategoryRulePreview, previewCategoryRule, saveCategoryRule } from "../preview/category-actions";
 
 export const ruleMatchLabels = {
@@ -19,6 +20,7 @@ export function CategoryRuleEditor({ categories, accounts, live, initial, onSave
   onSaved?: () => void;
   onCancel?: () => void;
 }) {
+  const viewKey = useSessionViewKey();
   const helpId = useId();
   const [draft, setDraft] = useState<CategoryRuleDraft>({
     categoryId: initial?.categoryId ?? "", description: initial?.description ?? "", matchType: initial?.matchType ?? "exact",
@@ -42,7 +44,7 @@ export function CategoryRuleEditor({ categories, accounts, live, initial, onSave
   }
 
   return <form action={() => startTransition(async () => {
-    const result = await previewCategoryRule(draft);
+    const result = await previewCategoryRule(viewKey, draft);
     setError(!result.ok);
     setMessage(result.ok ? "Prévia atualizada. Confira o alcance antes de salvar." : result.message);
     setPreview(result.ok ? result.preview : undefined);
@@ -95,7 +97,7 @@ export function CategoryRuleEditor({ categories, accounts, live, initial, onSave
       <button className="report-button" type="button" disabled={!live || pending || !valid || !preview} onClick={() => {
         if (!preview) return;
         startTransition(async () => {
-          const result = await saveCategoryRule({ ...draft, previewFingerprint: preview.fingerprint });
+          const result = await saveCategoryRule(viewKey, { ...draft, previewFingerprint: preview.fingerprint });
           setError(!result.ok);
           setMessage(result.ok ? "Regra salva." : result.message);
           setPreview(undefined);
