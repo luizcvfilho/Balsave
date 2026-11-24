@@ -40,13 +40,14 @@ export function orderedTransactions(rows: TransactionRow[], order = "recent") {
   });
 }
 
-export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, renderTags, balanceScope, empty = "Nenhum lançamento para os filtros selecionados." }: {
+export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, renderTags, balanceScope, amountHeading, empty = "Nenhum lançamento para os filtros selecionados." }: {
   label: string;
   rows: TransactionRow[];
   getHref: (id: string) => string;
   showPaymentMethod?: boolean;
   renderTags?: (transaction: Transaction) => ReactNode;
   balanceScope?: "account" | "consolidated";
+  amountHeading?: string;
   empty?: string;
 }) {
   const { transactionSource, live } = useFinancialReports();
@@ -61,7 +62,7 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
           {renderTags && <th role="columnheader" scope="col">Etiquetas</th>}
           {showPaymentMethod && <th role="columnheader" scope="col">Forma de pagamento</th>}
           <th role="columnheader" scope="col">Data</th>
-          <th role="columnheader" scope="col">{rows.some(row => row.netCents !== undefined) ? "Gasto líquido" : "Valor"}</th>
+          <th role="columnheader" scope="col">{amountHeading ?? (rows.some(row => row.netCents !== undefined) ? "Gasto líquido" : "Valor")}</th>
         </tr>
       </thead>
       <tbody role="rowgroup">

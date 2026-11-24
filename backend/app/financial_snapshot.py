@@ -277,6 +277,10 @@ def normalize_transaction(
         "cardId" if card else "accountId": account_id,
         "kind": kind,
     }
+    eligible_credit = (status == "POSTED" and raw.get("currencyCode") == "BRL" and kind in ("income", "credit")
+                       and label(raw.get("operationType")) != "RENDIMENTO_APLIC_FINANCEIRA")
+    if amount and (kind == "expense" or eligible_credit):
+        entry["receivableEligible"] = True
     classification = resolve_provider_category(raw, catalog)
     entry.update({key: value for key, value in classification.items() if key.startswith("providerCategory")})
     if kind == "transfer":
@@ -589,6 +593,9 @@ def load_snapshot(
     all_positions = [*accounts.values(), *investments.values()]
     all_entries = list(entries.values())
     candidates = reconcile(all_entries, all_positions, decisions or {})
+    for entry in all_entries:
+        if entry.get("kind") not in ("expense", "income", "credit") or entry.get("internalTransfer"):
+            entry.pop("receivableEligible", None)
     data = {
         "asOf": as_of,
         "accounts": list(accounts.values()),

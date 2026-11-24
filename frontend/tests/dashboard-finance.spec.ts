@@ -186,3 +186,47 @@ test("compares the same calendar day across a year boundary and stops actuals at
   expect(points[14]).toEqual({ day: 15, currentCents: null, averageCents: 60000 });
   expect(points[30]).toEqual({ day: 31, currentCents: null, averageCents: 70001 });
 });
+
+test("allocates targeted and pooled receipts while preserving the personal share and cash flow", async () => {
+  const { deriveReceivables } = await import("../src/lib/receivables");
+  const transactions = [
+    { id: "expense", name: "Dinner", kind: "expense", date: "2026-10-01", amountCents: 10000, tagIds: ["trip"] },
+    { id: "first", name: "First", kind: "credit", date: "2026-10-02", amountCents: 4000 },
+    { id: "second", name: "Second", kind: "income", date: "2026-11-02", amountCents: 3000 },
+  ] as const;
+  const groups = [{ expenseId: "expense", expectations: [
+    { id: "a", name: "A", amountCents: 3333 }, { id: "b", name: "B", amountCents: 3333 },
+  ], receipts: [
+    { creditId: "first", expectationId: "a", amountCents: 4000 },
+    { creditId: "second", expectationId: null, amountCents: 3000 },
+    { creditId: "missing", expectationId: null, amountCents: 500 },
+  ] }];
+  const [group] = deriveReceivables(groups, transactions, "2026-11-10");
+  expect(group).toMatchObject({ grossCents: 10000, receivedCents: 7000, appliedCents: 6666, pendingCents: 0, surplusCents: 334, netCents: 3334 });
+  expect(group.expectations.map(item => item.receivedCents)).toEqual([3333, 3333]);
+  expect(group.receipts[0].coverages).toEqual([{ expectationId: "a", amountCents: 3333 }, { expectationId: "b", amountCents: 667 }]);
+  expect(group.receipts[2].incomplete).toBe(true);
+  expect(deriveReceivables(groups, transactions, "2026-10-31")[0].appliedCents).toBe(4000);
+  expect(categoryBreakdown(spendingByMonth(transactions, "2026-11-10", new Set(["trip"]), groups), "2026-10").totalCents).toBe(3334);
+  expect(categoryBreakdown(spendingByMonth(transactions, "2026-11-10", undefined, groups, false, "gross"), "2026-10").totalCents).toBe(10000);
+  expect(transactionTotals(transactions)).toEqual({ incomingCents: 7000, outgoingCents: 10000, netCents: -3000 });
+});
+
+test("caps stale allocations and reserves targeted payments before pooling", async () => {
+  const { deriveReceivables } = await import("../src/lib/receivables");
+  const transactions = [
+    { id: "expense", name: "Dinner", kind: "expense", date: "2026-10-01", amountCents: 10000, receivableEligible: true },
+    { id: "pool", name: "Pool", kind: "credit", date: "2026-10-02", amountCents: 2000, receivableEligible: true },
+    { id: "target", name: "Target", kind: "credit", date: "2026-10-03", amountCents: 2000, receivableEligible: true },
+  ] as const;
+  const groups = [{ expenseId: "expense", expectations: [
+    { id: "a", name: "A", amountCents: 2000 }, { id: "b", name: "B", amountCents: 2000 },
+  ], receipts: [
+    { creditId: "pool", expectationId: null, amountCents: 3000 },
+    { creditId: "target", expectationId: "a", amountCents: 2000 },
+  ] }];
+  const [group] = deriveReceivables(groups, transactions, "2026-10-31", true);
+  expect(group.receipts[0]).toMatchObject({ eligibleCents: 2000, incomplete: true, coverages: [{ expectationId: "b", amountCents: 2000 }] });
+  expect(group.receipts[1].coverages).toEqual([{ expectationId: "a", amountCents: 2000 }]);
+  expect(deriveReceivables(groups, transactions.map(t => ({ ...t, receivableEligible: false })), "2026-10-31", true)[0].appliedCents).toBe(0);
+});

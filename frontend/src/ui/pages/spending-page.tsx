@@ -38,21 +38,26 @@ export function SpendingPage() {
 function CategoryExpenses({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilter> }) {
   const { params, update } = useReportQuery();
   const period = usePeriod(params, undefined, true);
-  const { asOf, expenses, live, plannedInstallments } = useFinancialReports();
+  const { asOf, expenses, live, plannedInstallments, receivableGroups } = useFinancialReports();
+  const gross = params.get("valor") === "bruto";
+  const hideTracked = params.get("acompanhamento") === "ocultar";
+  const tracked = new Set(receivableGroups.map(group => group.expenseId));
   const expenseCategoryOptions = useCategoryOptions();
   const category = optionValue(params.get("categoria"), expenseCategoryOptions.map(option => option.value));
   const installmentsOnly = params.get("compra") === "parcelada";
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
-  const results = expenses.filter(({ expense }) => period.includes(expense.date)
+  const results = expenses.filter(({ expense, refunds, netCents }) => (gross || netCents > 0)
+    && (!hideTracked || (!tracked.has(expense.id) && !expense.expectsRefund && refunds.length === 0))
+    && period.includes(expense.date)
     && matchesTransactionTags(expense, tagFilter.selected)
     && (!category || transactionCategoryKey(expense) === category)
     && (!installmentsOnly || expense.installment)
     && matchesSearch(search, expense.name));
   const rows = orderedTransactions(results.map(({ expense, receivedCents, netCents }) => ({
-    transaction: expense, receivedCents, netCents,
+    transaction: expense, receivedCents: gross ? 0 : receivedCents, netCents: gross ? expense.amountCents : netCents,
   })), order);
-  const total = results.reduce((sum, row) => sum + row.netCents, 0);
+  const total = results.reduce((sum, row) => sum + (gross ? row.expense.amountCents : row.netCents), 0);
   const dashboardMonth = params.get("painelMes") ?? undefined;
   const plansInPeriod = tagFilter.selected.size ? [] : plannedInstallments.filter(plan => period.includes(plan.date));
   const plans = plansInPeriod.filter(plan => (!category || (plan.categoryKey ?? categoryKeyForLabel(plan.category)) === category) && matchesSearch(search, plan.name));
@@ -70,18 +75,25 @@ function CategoryExpenses({ tagFilter }: { tagFilter: ReturnType<typeof useTagFi
           <ReportSelect label="Tipo de compra" value={installmentsOnly ? "parcelada" : ""} options={[
             { value: "", label: "Todas as compras" }, { value: "parcelada", label: "Parceladas" },
           ]} onChange={value => update({ compra: value })} />
+          <ReportSelect label="Valor" value={gross ? "bruto" : "liquido"} options={[
+            { value: "liquido", label: "Líquido" }, { value: "bruto", label: "Bruto" },
+          ]} onChange={value => update({ valor: value === "bruto" ? value : undefined })} />
+          <ReportSelect label="Despesas acompanhadas" value={hideTracked ? "ocultar" : "mostrar"} options={[
+            { value: "mostrar", label: "Mostrar todas" }, { value: "ocultar", label: "Ocultar acompanhadas" },
+          ]} onChange={value => update({ acompanhamento: value === "ocultar" ? value : undefined })} />
           <SearchField value={search} onChange={setSearch} />
           <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
         </div>
         {live && <p className="report-muted">Os gastos incluem compras da fatura aberta até a data da consulta. Créditos sem vínculo com a compra aparecem em “Lançamentos”.</p>}
         <ReportMetrics items={[
-          { label: "Gasto líquido", value: formatMoney(total) },
+          { label: gross ? "Gasto bruto" : "Gasto líquido", value: formatMoney(total) },
           { label: "Compras", value: String(rows.length) },
         ]} />
         <TransactionTable
           label="Compras por categoria"
           rows={rows}
           getHref={transactionHref}
+          amountHeading={gross ? "Gasto bruto" : "Gasto líquido"}
           showPaymentMethod
           empty={installmentsOnly ? "Nenhuma parcela para os filtros selecionados." : undefined}
         />
@@ -116,10 +128,14 @@ function CategoryExpenses({ tagFilter }: { tagFilter: ReturnType<typeof useTagFi
 
 function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilter> }) {
   const { params, update } = useReportQuery();
-  const { monthOptions, months, currentMonth, asOf, expenses, spending, reportedTransactions, paceChartPoints, canCompare } = useFinancialReports();
+  const { monthOptions, months, currentMonth, asOf, expenses, spending, reportedTransactions, receivableGroups, live, paceChartPoints, canCompare } = useFinancialReports();
   const month = optionValue(params.get("ritmoMes"), months,
     optionValue(params.get("mes"), months, currentMonth));
-  const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected) : spending;
+  const gross = params.get("valor") === "bruto";
+  const hideTracked = params.get("acompanhamento") === "ocultar";
+  const tracked = new Set(receivableGroups.map(group => group.expenseId));
+  const monthlySpending = tagFilter.selected.size || gross || hideTracked
+    ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected, receivableGroups, live, gross ? "gross" : "net", hideTracked) : spending;
   const points = paceChartPoints(month, monthlySpending);
   const lastReported = month === currentMonth ? Number(asOf.slice(8)) : points.length;
   const requestedDay = Number(params.get("dia"));
@@ -129,9 +145,12 @@ function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilt
   const comparison = canCompare(month);
   const categories = new Map<string, { name: string; cents: number }>();
   const dailyRows = [];
-  for (const { expense, netCents, receivedCents } of expenses) {
-    if (!expense.date.startsWith(month) || expense.date > date || !matchesTransactionTags(expense, tagFilter.selected)) continue;
-    if (expense.date === date) dailyRows.push({ transaction: expense, netCents, receivedCents });
+  for (const row of expenses) {
+    const { expense, refunds } = row;
+    const netCents = gross ? expense.amountCents : row.netCents;
+    const receivedCents = gross ? 0 : row.receivedCents;
+    if ((hideTracked && (tracked.has(expense.id) || expense.expectsRefund || refunds.length > 0)) || !expense.date.startsWith(month) || expense.date > date || !matchesTransactionTags(expense, tagFilter.selected)) continue;
+    if (expense.date === date && netCents > 0) dailyRows.push({ transaction: expense, netCents, receivedCents });
     if (netCents === 0) continue;
     const category = transactionCategoryKey(expense);
     categories.set(category, { name: transactionCategory(expense), cents: (categories.get(category)?.cents ?? 0) + netCents });
@@ -140,9 +159,15 @@ function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilt
   const dashboardMonth = params.get("painelMes") ?? undefined;
   return (
     <>
-      <SectionCard id="ritmo-detalhe" title="Gasto líquido acumulado">
+      <SectionCard id="ritmo-detalhe" title={gross ? "Gasto bruto acumulado" : "Gasto líquido acumulado"}>
         <div className="report-filters">
           <ReportSelect label="Mês" value={month} options={monthOptions} onChange={value => update({ ritmoMes: value, dia: undefined })} />
+          <ReportSelect label="Valor" value={gross ? "bruto" : "liquido"} options={[
+            { value: "liquido", label: "Líquido" }, { value: "bruto", label: "Bruto" },
+          ]} onChange={value => update({ valor: value === "bruto" ? value : undefined })} />
+          <ReportSelect label="Despesas acompanhadas" value={hideTracked ? "ocultar" : "mostrar"} options={[
+            { value: "mostrar", label: "Mostrar todas" }, { value: "ocultar", label: "Ocultar acompanhadas" },
+          ]} onChange={value => update({ acompanhamento: value === "ocultar" ? value : undefined })} />
         </div>
         {!comparison && <p className="report-muted">A comparação fica disponível quando há dados dos três meses anteriores.</p>}
         <LineChart
@@ -165,6 +190,7 @@ function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilt
           <TransactionTable
             label="Lançamentos do dia"
             rows={orderedTransactions(dailyRows)}
+            amountHeading={gross ? "Gasto bruto" : "Gasto líquido"}
             getHref={id => reportHref("/lancamentos", { painelMes: dashboardMonth, etiquetas: tagFilter.query, lancamento: id })}
             empty="Nenhum gasto neste dia."
           />
@@ -178,12 +204,12 @@ function SpendingRhythm({ tagFilter }: { tagFilter: ReturnType<typeof useTagFilt
                 key,
                 label: (
                   <Link className="report-link report-action" href={reportHref("/gastos", {
-                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: key, painelMes: dashboardMonth, etiquetas: tagFilter.query,
+                    mes: "personalizado", de: `${month}-01`, ate: date, categoria: key, painelMes: dashboardMonth, etiquetas: tagFilter.query, valor: gross ? "bruto" : undefined, acompanhamento: hideTracked ? "ocultar" : undefined,
                   })}>{name}</Link>
                 ),
                 value: formatMoney(cents),
               }))} />
-          ) : <p className="report-muted">Nenhum gasto líquido acumulado até este dia.</p>}
+          ) : <p className="report-muted">Nenhum gasto acumulado até este dia.</p>}
         </SectionCard>
       )}
     </>

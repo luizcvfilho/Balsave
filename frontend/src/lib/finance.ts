@@ -1,3 +1,5 @@
+import { deriveReceivables, type ReceivableGroup } from "./receivables";
+
 export type AccountBalance = {
   bank: string;
   balanceCents: number;
@@ -27,6 +29,7 @@ export type TransactionTag = { id: string; name: string };
 
 export type Transaction = {
   id: string;
+  receivableEligible?: boolean;
   date: string;
   name: string;
   amountCents: number;
@@ -196,10 +199,13 @@ export function previousMonths(month: string, count: number) {
   );
 }
 
-export function expensesWithRefunds(transactions: readonly Transaction[], asOf: string) {
+export function expensesWithRefunds(transactions: readonly Transaction[], asOf: string, groups: readonly ReceivableGroup[] = [], requireEligibility = false) {
+  const receivables = deriveReceivables(groups, transactions, asOf, requireEligibility);
+  const byExpense = new Map(receivables.map(group => [group.expenseId, group]));
+  const linkedCredits = new Set(groups.flatMap(group => group.receipts.map(receipt => receipt.creditId)));
   const refundsByExpense = new Map<string, Refund[]>();
   for (const transaction of transactions) {
-    if (transaction.kind === "refund" && transaction.date <= asOf) {
+    if (transaction.kind === "refund" && transaction.date <= asOf && !linkedCredits.has(transaction.id)) {
       const refunds = refundsByExpense.get(transaction.expenseId) ?? [];
       refunds.push(transaction);
       refundsByExpense.set(transaction.expenseId, refunds);
@@ -210,17 +216,19 @@ export function expensesWithRefunds(transactions: readonly Transaction[], asOf: 
     .filter((transaction): transaction is Expense => transaction.kind === "expense" && transaction.date <= asOf)
     .map(expense => {
       const refunds = refundsByExpense.get(expense.id) ?? [];
-      const receivedCents = refunds.reduce((sum, refund) => sum + refund.amountCents, 0);
+      const receivedCents = refunds.reduce((sum, refund) => sum + refund.amountCents, 0) + (byExpense.get(expense.id)?.appliedCents ?? 0);
       const netCents = Math.max(0, expense.amountCents - receivedCents);
       const status = netCents === 0 ? "completed" : receivedCents > 0 ? "partial" : "pending";
       return { expense, refunds, receivedCents, netCents, status } as const;
     });
 }
 
-export function spendingByMonth(transactions: readonly Transaction[], asOf: string, selectedTags?: ReadonlySet<string>) {
+export function spendingByMonth(transactions: readonly Transaction[], asOf: string, selectedTags?: ReadonlySet<string>, groups: readonly ReceivableGroup[] = [], requireEligibility = false, mode: "net" | "gross" = "net", hideTracked = false) {
   const months = new Map<string, { dailyCents: number[]; categoryCents: Map<string, number>; categoryLabels: Map<string, string>; installmentCents: number }>();
-  for (const { expense, netCents } of expensesWithRefunds(transactions, asOf)) {
-    if (netCents === 0 || (selectedTags && !matchesTransactionTags(expense, selectedTags))) continue;
+  for (const row of expensesWithRefunds(transactions, asOf, groups, requireEligibility)) {
+    const { expense } = row;
+    const netCents = mode === "gross" ? expense.amountCents : row.netCents;
+    if ((hideTracked && (expense.expectsRefund || row.refunds.length > 0 || groups.some(group => group.expenseId === expense.id))) || netCents === 0 || (selectedTags && !matchesTransactionTags(expense, selectedTags))) continue;
 
     const month = expense.date.slice(0, 7);
     const day = Number(expense.date.slice(8));

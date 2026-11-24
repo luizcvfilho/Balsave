@@ -5,6 +5,7 @@ import {
   bankTransfersAfterMonth, categoryKeyForLabel, daysInMonth, expensesWithRefunds, previousMonths, spendingByMonth, spendingPace, summarizeBalances,
   type Transaction, transactionCategory, transactionCategoryKey,
 } from "../lib/finance";
+import { deriveReceivables } from "../lib/receivables";
 import { formatDate, formatMoney, formatMonth, formatMonthName, formatShortMonth } from "../lib/format";
 import { cardLabel, type FinancialData } from "./financial-data";
 
@@ -27,8 +28,15 @@ function buildReports(data: FinancialData, live: boolean) {
   if (lastPlannedDate && lastPlannedDate > asOf) planningMaxDate = lastPlannedDate;
   const planningMonths = [...new Set([...months, ...plannedInstallments.map(plan => plan.date.slice(0, 7))])].sort().reverse();
   const planningMonthOptions = planningMonths.map(month => ({ value: month, label: formatMonth(month) }));
-  const spending = spendingByMonth(reportedTransactions, asOf);
-  const expenses = expensesWithRefunds(reportedTransactions, asOf);
+  const receivableGroups = data.receivableGroups ?? [];
+  const receivables = deriveReceivables(receivableGroups, data.transactions, asOf, live);
+  const receivableCredits = new Map<string, { appliedCents: number; surplusCents: number }>();
+  for (const group of receivables) for (const receipt of group.receipts) {
+    const previous = receivableCredits.get(receipt.creditId) ?? { appliedCents: 0, surplusCents: 0 };
+    receivableCredits.set(receipt.creditId, { appliedCents: previous.appliedCents + receipt.appliedCents, surplusCents: previous.surplusCents + receipt.surplusCents });
+  }
+  const spending = spendingByMonth(data.transactions, asOf, undefined, receivableGroups, live);
+  const expenses = expensesWithRefunds(data.transactions, asOf, receivableGroups, live);
   const trackedRefunds = expenses.filter(({ expense, refunds }) => expense.expectsRefund || refunds.length > 0);
   const expenseCategories = [...new Map([
     ...expenses.map(({ expense }) => [transactionCategoryKey(expense), transactionCategory(expense)] as const),
@@ -97,7 +105,7 @@ function buildReports(data: FinancialData, live: boolean) {
   }
 
   return {
-    ...data, tags, investments, positions, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
+    ...data, tags, investments, positions, receivableGroups, receivables, receivableCredits, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
     plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
     expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
   };

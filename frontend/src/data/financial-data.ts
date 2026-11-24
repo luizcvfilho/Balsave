@@ -1,4 +1,5 @@
 import type { AccountBalance, CreditCard, Transaction, TransactionTag } from "../lib/finance";
+import type { ReceivableGroup } from "../lib/receivables";
 
 export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   id: string;
@@ -46,6 +47,7 @@ export type ReportCard = CreditCard & {
 
 export type FinancialData = {
   tags?: TransactionTag[];
+  receivableGroups?: ReceivableGroup[];
   categories?: LocalCategory[];
   categoryRules?: CategoryRule[];
   categoryCatalogStale?: boolean;

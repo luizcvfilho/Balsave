@@ -32,6 +32,7 @@ export function Header({ signedIn, showNavigation, showHomeSignIn }: {
           <Stack direction="row" spacing={{ xs: 1, sm: 2 }} useFlexGap sx={{ alignItems: "center", minWidth: 0 }}>
             {showNavigation && (
               <nav aria-label="Navegação principal" className="report-filters">
+                <Link href="/a-receber" className="report-link report-action">A receber</Link>
                 <Link href="/categorias" className="report-link report-action">Categorias</Link>
                 <Link href="/conexoes" className="report-link report-action">Conectar bancos</Link>
                 {signedIn && <SignOutForm />}

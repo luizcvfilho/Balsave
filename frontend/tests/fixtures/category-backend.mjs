@@ -13,6 +13,16 @@ const legacyHash = `scrypt-v1$${salt.toString("hex")}$${key.toString("hex")}`;
 let connectedOwner;
 const accountId = "10000000-0000-0000-0000-000000000001";
 const transactionId = `${accountId}.20000000-0000-0000-0000-000000000001`;
+const receivableEntries = [
+  [2, "Jantar dividido", "2026-10-30", "expense", 10000],
+  [3, "Pix da Ana", "2026-11-10", "income", 4000],
+  [4, "Pix do Bruno", "2026-11-11", "income", 3000],
+  [5, "Compra da empresa", "2026-10-28", "expense", 500000],
+  [6, "Crédito da empresa", "2026-11-12", "credit", 500000],
+].map(([suffix, name, date, kind, amountCents]) => ({
+  id: `${accountId}.20000000-0000-0000-0000-00000000000${suffix}`,
+  accountId, name, date, kind, amountCents, receivableEligible: true,
+}));
 const initialCategories = [
   { id: "30000000-0000-0000-0000-000000000001", code: "food", name: "Alimentação", archived: false },
   { id: "30000000-0000-0000-0000-000000000002", code: "shopping", name: "Compras", archived: false },
@@ -24,6 +34,9 @@ let tags;
 let transactionTags;
 let snapshotUnavailable;
 let assignmentConflict;
+let receivableGroups;
+let receivablesEnabled;
+let missingCredit;
 
 async function reset() {
   const connection = await pool.connect();
@@ -56,6 +69,9 @@ async function reset() {
   transactionTags = [];
   snapshotUnavailable = false;
   assignmentConflict = false;
+  receivableGroups = [];
+  receivablesEnabled = false;
+  missingCredit = false;
 }
 await reset();
 
@@ -83,7 +99,8 @@ function snapshot() {
         category: category.name, categoryId: category.id, categoryKey: category.code ?? `custom:${category.id}`,
         categorySource: assignment ? "manual" : rule ? "rule" : "pluggy", providerCategoryId: "08020000", providerCategoryName: "Electronics",
         providerCategoryLabel: "Eletrônicos", categoryNeedsReview: false, tagIds: transactionTags,
-      }],
+      }, ...receivablesEnabled ? receivableEntries.filter(entry => !missingCredit || entry !== receivableEntries[2]) : []],
+      receivableGroups,
       categories,
       tags,
       categoryRules: rules,
@@ -134,6 +151,8 @@ createServer(async (request, response) => {
   if (request.url === "/controls" && request.method === "POST") {
     snapshotUnavailable = body.snapshotUnavailable === true;
     assignmentConflict = body.assignmentConflict === true;
+    if (body.receivablesEnabled !== undefined) receivablesEnabled = body.receivablesEnabled;
+    if (body.missingCredit !== undefined) missingCredit = body.missingCredit;
     if (body.assignment !== undefined) assignment = body.assignment;
     return respond(response, 200, { saved: true });
   }
@@ -203,6 +222,27 @@ createServer(async (request, response) => {
   if (path === "transaction-tags" && request.method === "POST") {
     if (body.entryId !== transactionId || !body.tagIds.every(id => tags.some(tag => tag.id === id))) return respond(response, 404, { detail: "Resource unavailable" });
     transactionTags = body.tagIds;
+    return respond(response, 200, { saved: true });
+  }
+  if (receivablesEnabled && request.method === "POST" && ["receivable-plan", "receivable-link"].includes(path)) {
+    let group = receivableGroups.find(item => item.expenseId === body.expenseId);
+    if (!group) {
+      group = { expenseId: body.expenseId, expectations: [], receipts: [] };
+      receivableGroups.push(group);
+    }
+    if (path === "receivable-plan") {
+      group.expectations = body.expectations;
+      for (const receipt of group.receipts) {
+        if (!group.expectations.some(item => item.id === receipt.expectationId)) receipt.expectationId = null;
+      }
+    } else {
+      const previous = receivableGroups.find(item => item.expenseId === body.previousExpenseId) ?? group;
+      previous.receipts = previous.receipts.filter(item => item.creditId !== body.creditId);
+      if (body.amountCents > 0) group.receipts.push({
+        creditId: body.creditId, expectationId: body.expectationId, amountCents: body.amountCents,
+      });
+    }
+    receivableGroups = receivableGroups.filter(item => item.expectations.length || item.receipts.length);
     return respond(response, 200, { saved: true });
   }
   if (path === "category-rule-preview" && request.method === "POST") return respond(response, 200, { preview: rulePreview(body) });

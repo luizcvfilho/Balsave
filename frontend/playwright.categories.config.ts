@@ -11,7 +11,7 @@ const baseURL = "http://127.0.0.1:3106";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["category-live.e2e.spec.ts", "tag-live.e2e.spec.ts"],
+  testMatch: ["category-live.e2e.spec.ts", "tag-live.e2e.spec.ts", "receivable-live.e2e.spec.ts"],
   workers: 1,
   use: { baseURL },
   projects: [

@@ -26,11 +26,15 @@ Migration `0009` remains in the migration history so databases that already appl
 
 Migration `0010` stores personal tags and their assignments using the owner and existing provider transaction reference. The write API verifies the transaction against the owner's Pluggy snapshot and validates every selected tag before replacing the assignments in one database transaction. Snapshot responses re-read tag preferences from PostgreSQL so they appear after provider refreshes and across backend workers.
 
+Migration `0011` stores expected amounts by payer and receipt allocations by owner and provider transaction reference. It keeps amounts in integer BRL cents. FastAPI verifies expenses and posted credits from the owner's snapshot. A database transaction lock serializes each owner's updates across workers. Snapshots re-read these records from PostgreSQL and keep saved references available for review when provider records are unavailable.
+
 ## Amounts and reporting dates
 
 The development plan proposed storing BRL amounts as integer cents in PostgreSQL. The existing ledger schema uses exact `numeric(20,6)` amounts with a currency code and a separate debit or credit direction. This preserves source precision up to six decimal places. Python reads these amounts as `Decimal`. Keep this schema for the foundation. The BRL reporting boundary uses integer cents for the demo and frontend calculations. FastAPI converts supported BRL snapshot amounts to cents with decimal `ROUND_HALF_UP` rounding before sending them to the frontend.
 
 `transactions.occurred_on` is a PostgreSQL `date`. The demo's `YYYY-MM-DD` strings and period boundaries represent dates in `America/Sao_Paulo`. For provider data, the API preserves date-only values and converts timestamps to the reporting timezone before selecting the date. The browser formats the resulting date and BRL amounts in `pt-BR`. A linked refund appears as a credit on the receipt date and reduces spending in the original purchase month once the receipt is within the report's cutoff date.
+
+Expected amounts track what is owed. Actual receipts reduce net spending. Each allocated receipt first covers the payer selected for it, then any remainder covers outstanding shares on the same expense. Amounts above the total planned reimbursement are surplus and do not reduce the owner's share. Direct reimbursements with no plan can cover the entire expense. Cash flow keeps each original transaction amount and date.
 
 “Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Painel financeiro” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
 

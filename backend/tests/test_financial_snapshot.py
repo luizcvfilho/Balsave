@@ -35,6 +35,7 @@ class FinancialSnapshotTests(TestCase):
             "amountCents": 1547,
             "cardId": ACCOUNT,
             "kind": "expense",
+            "receivableEligible": True,
             "category": "Alimentação",
             "categoryKey": "food",
             "categorySource": "pluggy",

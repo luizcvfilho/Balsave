@@ -1,5 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+test("opens the dedicated receivables page and returns to the selected status", async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", error => pageErrors.push(error));
+  await page.goto("/lancamentos");
+  await expect(page.getByRole("heading", { name: "Lançamentos", exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "A receber" }).click();
+  await expect(page.getByRole("heading", { name: "A receber", exact: true })).toBeVisible();
+  await page.getByLabel("Status").selectOption("partial");
+  const partialHotel = page.getByRole("listitem").filter({ has: page.getByText("Parcial", { exact: true }) })
+    .getByRole("link", { name: "Hotel", exact: true });
+  await expect(partialHotel).toHaveAttribute("href", /status=partial/);
+  await partialHotel.click();
+  await expect(page.getByRole("heading", { name: "Detalhe do lançamento" })).toBeVisible();
+  await page.getByRole("link", { name: "Voltar para A receber" }).click();
+  await expect(page).toHaveURL(/\/a-receber\?status=partial$/);
+  await expect(page.getByLabel("Status")).toHaveValue("partial");
+  expect(pageErrors).toEqual([]);
+});
+
 test("opens the month and category from the dashboard and keeps the month on return", async ({ page }) => {
   await page.goto("/");
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
@@ -156,7 +175,7 @@ test("reports the hotel net expense in the purchase month and the credit in the 
 
   await page.goto("/lancamentos?mes=2026-10");
   await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
-  await page.getByLabel("Período", { exact: true }).selectOption("2026-11");
+  await page.goto("/lancamentos?mes=2026-11");
   const credit = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Reembolso do hotel", exact: true }) });
   await expect(credit.getByText("11/11/2026")).toBeVisible();
   await expect(credit.getByText(/\+R\$\s*500,00/)).toBeVisible();

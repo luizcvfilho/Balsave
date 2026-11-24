@@ -89,6 +89,8 @@ Use “Ver detalhes” to open the spending, account, card, or transaction repor
 
 In “Lançamentos” → “Reembolsos”, users can track pending, partial, and completed reimbursements and open the original purchase or individual receipts. Income and refund details support free-text classifications and tags. These annotations are stored in the current browser for the mock dataset and can be found through “Buscar lançamentos”.
 
+Use “A receber” in the main navigation to track planned amounts, posted credits, and pending balances. With a Meu Pluggy connection, open an imported expense in “Lançamentos” and select “Definir valores a receber”. Enter the payers and amounts, or use “Dividir igualmente” to split the expense and optionally include your own share. From “A receber”, open the expense to link a posted credit and choose how much of the credit to use. You can also start from the credit using “Vincular a uma despesa”, including when no amount was planned. The spending reports use confirmed receipts to update the original month's net expense. Account statements keep the original transaction amounts and dates.
+
 ## Database migrations
 
 `make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting Next.js and FastAPI. The `migrate` service uses the `postgres` role to make schema changes. FastAPI uses the `balsave_app` role. Better Auth uses the separate `balsave_identity` role, with permissions limited to its own schema.
@@ -173,7 +175,7 @@ Reconciliation compares structured transaction data. Candidates require differen
 
 Ledger colors use gray for reconciled internal movements, green for remaining credits and red for remaining debits. An individual account statement retains its actual debit or credit. The consolidated chart cancels paired transfers only when both positions are included. The calculation uses structured fields and saved decisions independently of transaction descriptions or bank-specific product names.
 
-Card limit usage requires a reported total and available limit. Open bill totals and purchase-to-refund links require additional data. The reports show available card credits without applying them to a purchase. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
+Card limit usage requires a reported total and available limit. Open bill totals depend on the data returned by the provider. Posted card credits can be linked manually to a purchase in “Lançamentos”. The personal-use Pluggy plan cannot list existing application item IDs, so connections created in the Pluggy Dashboard can be authorized again in the Balsave widget. [Pluggy item documentation](https://docs.pluggy.ai/en/docs/connections/item)
 
 ### Local categories and personal rules
 

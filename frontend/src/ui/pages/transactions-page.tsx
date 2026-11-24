@@ -5,11 +5,11 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import Link from "next/link";
 import { useState } from "react";
-import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { CategoryEditor } from "../../components/details/category-editor";
+import { DemoRefundDetail, DemoRefunds } from "../../components/details/demo-refunds";
+import { ReceivableDetail, ReceivablesList } from "../../components/details/receivable-view";
 import { ReceiptEditor, useReceiptAnnotations } from "../../components/details/receipt-annotations";
 import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
@@ -22,36 +22,33 @@ import { orderedTransactions, TransactionTable } from "../../components/details/
 import { useFinancialReports } from "../../data/financial-reports";
 import { bankBalanceImpact, isIncoming, matchesTransactionTags, type Transaction, transactionCategory, transactionCategoryKey, transactionKindLabels, transactionTotals } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
-import { optionValue } from "../../lib/report-links";
-
-const refundLabels = {
-  pending: "Pendente",
-  partial: "Parcial",
-  completed: "Concluído",
-};
-const statusOptions = [
-  { value: "", label: "Todos os status" },
-  { value: "pending", label: "Pendentes" },
-  { value: "partial", label: "Parciais" },
-  { value: "completed", label: "Concluídos" },
-];
+import { optionValue, reportHref } from "../../lib/report-links";
 
 export function TransactionsPage() {
   const { params, href } = useReportQuery();
   const tagFilter = useTagFilter(params);
-  const { reportedTransactions } = useFinancialReports();
+  const { live, reportedTransactions } = useFinancialReports();
   const dashboardMonth = params.get("painelMes");
   const refunds = params.get("aba") === "reembolsos";
+  const receivables = live && params.get("aba") === "a-receber";
   const id = params.get("lancamento");
   const selected = reportedTransactions.find(transaction => transaction.id === id);
   const [search, setSearch] = useState("");
+  const transactionHref = (entryId: string) => href({ lancamento: entryId });
 
   if (id) {
+    const fromReceivables = params.get("origem") === "a-receber";
+    const query = new URLSearchParams(params);
+    query.delete("lancamento");
+    query.delete("origem");
     return (
       <ReportLayout
         title="Detalhe do lançamento"
         dashboardMonth={dashboardMonth}
-        back={{ href: href({ lancamento: undefined }), label: refunds ? "Voltar aos reembolsos" : "Voltar aos lançamentos" }}
+        back={fromReceivables ? { href: reportHref("/a-receber", query), label: "Voltar para A receber" } : {
+          href: href({ lancamento: undefined }),
+          label: receivables ? "Voltar a receber" : refunds ? "Voltar aos reembolsos" : "Voltar aos lançamentos",
+        }}
       >
         {selected ? <TransactionDetail key={selected.id} transaction={selected} /> : (
           <SectionCard id="lancamento-ausente" title="Lançamento não encontrado">
@@ -65,10 +62,10 @@ export function TransactionsPage() {
   return (
     <ReportLayout title="Lançamentos" dashboardMonth={dashboardMonth} dashboardTags={tagFilter.query}>
       <ReportNavigation label="Detalhes de lançamentos" options={[
-        { label: "Todos os lançamentos", href: href({ aba: undefined }), active: !refunds },
-        { label: "Reembolsos", href: href({ aba: "reembolsos" }), active: refunds },
+        { label: "Todos os lançamentos", href: href({ aba: undefined }), active: !refunds && !receivables },
+        ...(live ? [{ label: "A receber", href: reportHref("/a-receber", { painelMes: dashboardMonth ?? undefined, etiquetas: tagFilter.query }), active: receivables }] : [{ label: "Reembolsos", href: href({ aba: "reembolsos" }), active: refunds }]),
       ]} />
-      {refunds ? <Refunds /> : <TransactionLedger search={search} setSearch={setSearch} tagFilter={tagFilter} />}
+      {receivables ? <ReceivablesList transactionHref={transactionHref} /> : refunds && !live ? <DemoRefunds transactionHref={transactionHref} /> : <TransactionLedger search={search} setSearch={setSearch} tagFilter={tagFilter} />}
     </ReportLayout>
   );
 }
@@ -79,7 +76,7 @@ function TransactionLedger({ search, setSearch, tagFilter }: {
   tagFilter: ReturnType<typeof useTagFilter>;
 }) {
   const { params, href, update } = useReportQuery();
-  const { live, reportedTransactions } = useFinancialReports();
+  const { live, reportedTransactions, receivableCredits } = useFinancialReports();
   const [editingId, setEditingId] = useState<string>();
   const annotations = useReceiptAnnotations(!live);
   const period = usePeriod(params);
@@ -113,10 +110,20 @@ function TransactionLedger({ search, setSearch, tagFilter }: {
 
   const matches = reportedTransactions.flatMap(transaction => {
     const annotation = annotations[transaction.id];
-    const labels = [annotation?.classification, ...(transaction.tags ?? []), ...(annotation?.tags ?? [])];
+    const receivable = receivableCredits.get(transaction.id);
+    const appliedCents = receivable?.appliedCents ?? 0;
+    const labels = [
+      annotation?.classification,
+      appliedCents > 0 ? `Reembolso: ${formatMoney(appliedCents)}` : undefined,
+      receivable?.surplusCents ? `Excedente: ${formatMoney(receivable.surplusCents)}` : undefined,
+      ...(transaction.tags ?? []),
+      ...(annotation?.tags ?? []),
+    ];
+    const matchesType = !type || (type === "refund" && appliedCents > 0)
+      || (transaction.kind === type && (!appliedCents || appliedCents < transaction.amountCents));
     if (!period.includes(transaction.date)
       || !matchesTransactionTags(transaction, tagFilter.selected)
-      || (type && transaction.kind !== type)
+      || !matchesType
       || (category && transactionCategoryKey(transaction) !== category)
       || !matchesSearch(search, transaction.name, ...labels, ...transactionTagNames(transaction))) return [];
     return [{ transaction, annotation: labels.filter(Boolean).join(" · ") }];
@@ -171,91 +178,13 @@ function TransactionLedger({ search, setSearch, tagFilter }: {
   );
 }
 
-function Refunds() {
-  const { params, href, update } = useReportQuery();
-  const { asOf, live, trackedRefunds } = useFinancialReports();
-  const period = usePeriod(params, "todos");
-  const status = optionValue(params.get("status"), Object.keys(refundLabels));
-  const results = trackedRefunds.filter(group =>
-    (!status || group.status === status)
-    && (period.includes(group.expense.date) || group.refunds.some(refund => period.includes(refund.date))),
-  ).sort((first, second) => second.expense.date.localeCompare(first.expense.date));
-
-  if (live) {
-    return (
-      <SectionCard id="acompanhamento" title="Acompanhar reembolsos">
-        <p className="report-muted">Créditos importados aparecem em “Todos os lançamentos”. O acompanhamento depende do vínculo com a compra original.</p>
-      </SectionCard>
-    );
-  }
-
-  return (
-    <SectionCard id="acompanhamento" title="Acompanhar reembolsos">
-      <div className="report-filters">
-        <PeriodFields period={period} update={update} />
-        <ReportSelect label="Status" value={status} options={statusOptions} onChange={value => update({ status: value })} />
-      </div>
-      <p className="report-muted">
-        Compras ou recebimentos no período. O saldo pendente considera os valores recebidos até {formatDate(asOf)}.
-      </p>
-      {results.length > 0 ? (
-        // biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden.
-        <ul className="report-list" role="list">
-          {results.map(group => (
-            <li key={group.expense.id} className="report-list-item">
-              <div className="report-group">
-                <Link className="report-link report-action" href={href({ lancamento: group.expense.id })}>{group.expense.name}</Link>
-                <span className="report-strong">{refundLabels[group.status]}</span>
-              </div>
-              <p className="report-muted">Compra em {formatDate(group.expense.date)}</p>
-              <RefundAmounts group={group} />
-              <RefundCredits group={group} />
-            </li>
-          ))}
-        </ul>
-      ) : <p className="report-muted" role="status">Nenhum reembolso para os filtros selecionados.</p>}
-    </SectionCard>
-  );
-}
-
-type RefundGroup = ReturnType<typeof useFinancialReports>["trackedRefunds"][number];
-
-function RefundAmounts({ group }: { group: RefundGroup }) {
-  return <ReportMetrics items={[
-    { label: "Valor original", value: formatMoney(group.expense.amountCents) },
-    { label: "Recebido", value: formatMoney(group.receivedCents) },
-    { label: "Saldo pendente", value: formatMoney(group.netCents) },
-  ]} />;
-}
-
-function RefundCredits({ group }: { group: RefundGroup }) {
-  const { href } = useReportQuery();
-  if (group.refunds.length === 0) return <p className="report-muted">Nenhum valor recebido até o momento.</p>;
-
-  return (
-    <BreakdownList rows={[...group.refunds].sort((first, second) => second.date.localeCompare(first.date))
-      .map(refund => ({
-        key: refund.id,
-        label: (
-          <Link className="report-link report-action" href={href({ lancamento: refund.id })}>
-            {refund.name} · {formatDate(refund.date)}
-          </Link>
-        ),
-        value: formatSignedMoney(refund.amountCents),
-      }))} />
-  );
-}
-
 function TransactionDetail({ transaction }: { transaction: Transaction }) {
   const { href } = useReportQuery();
-  const { live, tags, trackedRefunds, transactionSource } = useFinancialReports();
+  const { live, tags, transactionSource, receivableCredits } = useFinancialReports();
   const annotations = useReceiptAnnotations(!live);
-  const group = trackedRefunds.find(({ expense }) => {
-    const expenseId = transaction.kind === "refund" ? transaction.expenseId : transaction.id;
-    return expense.id === expenseId;
-  });
   const source = transactionSource(transaction);
   const impact = bankBalanceImpact(transaction);
+  const receivable = receivableCredits.get(transaction.id);
 
   return (
     <>
@@ -263,29 +192,22 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
         <ReportMetrics items={[
           { label: "Valor", value: formatSignedMoney(isIncoming(transaction) ? transaction.amountCents : -transaction.amountCents) },
           { label: transaction.accountId ? "Impacto nesta conta" : transaction.investmentId ? "Impacto neste investimento" : "Impacto no saldo em contas", value: impact === 0 ? "Sem efeito" : formatSignedMoney(impact) },
-          { label: "Tipo", value: transactionKindLabels[transaction.kind] },
+          { label: "Tipo", value: receivable?.appliedCents === transaction.amountCents ? "Reembolso" : transactionKindLabels[transaction.kind] },
+          ...(receivable?.appliedCents ? [{ label: "Reembolso", value: formatMoney(receivable.appliedCents) }] : []),
+          ...(receivable?.surplusCents ? [{ label: "Excedente", value: formatMoney(receivable.surplusCents) }] : []),
           { label: "Categoria", value: transactionCategory(transaction) },
           ...(transaction.tags?.length ? [{ label: "Tags", value: transaction.tags.join(" · ") }] : []),
           ...(source ? [{ label: "Conta ou cartão", value: source }] : []),
         ]} />
       </SectionCard>
       {transaction.kind === "expense" && <CategoryEditor transaction={transaction} />}
+      {live && <ReceivableDetail transaction={transaction} />}
       {live && transaction.tagIds !== undefined && (
         <SectionCard id="etiquetas-lancamento" title="Etiquetas">
           <TagEditor entryId={transaction.id} tagIds={transaction.tagIds} tags={tags} />
         </SectionCard>
       )}
-      {group && (
-        <SectionCard id="vinculo-reembolso" title="Acompanhamento do reembolso" description={refundLabels[group.status]}>
-          {transaction.kind === "refund" && (
-            <Link className="report-link report-action" href={href({ lancamento: group.expense.id })}>
-              Compra original · {group.expense.name} · {formatDate(group.expense.date)}
-            </Link>
-          )}
-          <RefundAmounts group={group} />
-          {transaction.kind === "expense" && <RefundCredits group={group} />}
-        </SectionCard>
-      )}
+      <DemoRefundDetail transaction={transaction} transactionHref={id => href({ lancamento: id })} />
       {!live && (transaction.kind === "income" || transaction.kind === "refund") && (
         <SectionCard id="classificacao-recebimento" title="Classificação e tags">
           <ReceiptEditor id={transaction.id} annotation={annotations[transaction.id]} />

@@ -1,6 +1,7 @@
 import os
 from collections import OrderedDict
 from copy import deepcopy
+from datetime import datetime
 from hmac import digest
 from threading import Lock
 from time import monotonic
@@ -12,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app import auth, category_catalog, category_rule_store, category_store, database, pluggy, tag_store
+from app import auth, category_catalog, category_rule_store, category_store, database, pluggy, receivable_store, tag_store
 from app.category_resolution import apply_categories
-from app.financial_snapshot import load_snapshot
+from app.financial_snapshot import REPORT_TIMEZONE, load_snapshot
 
 
 router = APIRouter(prefix="/_internal/pluggy", include_in_schema=False)
@@ -79,7 +80,8 @@ def apply_owner_preferences(connection, owner: UUID, data: dict) -> dict:
     apply_categories(data, categories, category_store.assignments(connection, owner), rules)
     data["categories"] = categories
     data["categoryRules"] = rules
-    return tag_store.apply_tags(connection, owner, data)
+    tag_store.apply_tags(connection, owner, data)
+    return receivable_store.apply(connection, owner, data)
 
 
 def owner_snapshot_lock(owner: UUID) -> Lock:
@@ -191,14 +193,34 @@ def save_connection(payload: Connection, owner: UUID = Depends(auth.require_user
 def snapshot(owner: UUID = Depends(auth.require_user)) -> JSONResponse:
     try:
         items = owner_items(owner)
-        if not items:
-            return response({"connected": False})
         with owner_snapshot_lock(owner):
             with database.connect() as connection:
-                data = owner_snapshot(owner, items, connection)
-            return response({"connected": True, "data": public_snapshot(data)})
+                if items:
+                    try:
+                        data = owner_snapshot(owner, items, connection)
+                    except pluggy.PluggyError:
+                        data = saved_receivables_snapshot(connection, owner, len(items))
+                        if not data["receivableGroups"]:
+                            raise
+                else:
+                    data = saved_receivables_snapshot(connection, owner, 0)
+                    if not data["receivableGroups"]:
+                        return response({"connected": False})
+        return response({"connected": True, "data": public_snapshot(data)})
     except (KeyError, psycopg.Error, pluggy.PluggyError):
         raise HTTPException(status_code=503, detail="Could not load financial data") from None
+
+
+def saved_receivables_snapshot(connection, owner: UUID, connection_count: int) -> dict:
+    return receivable_store.apply(connection, owner, {
+        "asOf": datetime.now(REPORT_TIMEZONE).date().isoformat(),
+        "accounts": [],
+        "cards": [],
+        "transactions": [],
+        "balanceSnapshots": [],
+        "connectionCount": connection_count,
+        "failedConnections": connection_count,
+    })
 
 
 @router.post("/reconciliation")

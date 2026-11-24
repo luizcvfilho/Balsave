@@ -21,7 +21,11 @@ const mockData = {
   failedConnections: 0,
 } satisfies FinancialData;
 
-export async function FinancialPage({ children, showDemoWhenSignedOut = false }: { children: ReactNode; showDemoWhenSignedOut?: boolean }) {
+export async function FinancialPage({ children, showDemoWhenSignedOut = false, showSavedReceivablesWhenUnavailable = false }: {
+  children: ReactNode;
+  showDemoWhenSignedOut?: boolean;
+  showSavedReceivablesWhenUnavailable?: boolean;
+}) {
   await connection();
   if (!authEnabled() || (showDemoWhenSignedOut && (await sessionView()).status === "anonymous")) {
     return <FinancialReportsProvider data={mockData} live={false}>{children}</FinancialReportsProvider>;
@@ -30,7 +34,8 @@ export async function FinancialPage({ children, showDemoWhenSignedOut = false }:
   const response = await financialRequest("snapshot");
   if (response?.ok) {
     const result: { connected: false } | { connected: true; data: FinancialData } = await response.json();
-    if (!result.connected) {
+    const hasSavedReceivables = result.connected && showSavedReceivablesWhenUnavailable && Boolean(result.data.receivableGroups?.length);
+    if (!result.connected || (!result.data.connectionCount && !hasSavedReceivables)) {
       return (
         <main className="report-layout">
           <SectionCard id="conectar-bancos" title="Conecte seus bancos">
@@ -39,7 +44,7 @@ export async function FinancialPage({ children, showDemoWhenSignedOut = false }:
         </main>
       );
     }
-    if (result.data.failedConnections < result.data.connectionCount) {
+    if (result.data.failedConnections < result.data.connectionCount || hasSavedReceivables) {
       return <FinancialReportsProvider data={result.data} live>{children}</FinancialReportsProvider>;
     }
   }

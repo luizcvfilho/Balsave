@@ -116,6 +116,7 @@ type FinancialReadPath = "snapshot" | "categories";
 type FinancialMutationPath = "token" | "connections" | "reconciliation" | "position-links"
   | "category-create" | "category-update" | "transaction-category"
   | "tag-create" | "tag-update" | "transaction-tags"
+  | "receivable-plan" | "receivable-link"
   | "category-rule-preview" | "category-rule-save" | "category-rule-update";
 
 export async function financialRequest(path: FinancialReadPath): Promise<Response | undefined>;

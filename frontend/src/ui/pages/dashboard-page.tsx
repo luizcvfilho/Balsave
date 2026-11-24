@@ -27,13 +27,13 @@ export function DashboardPage() {
   const { params, update } = useReportQuery();
   const tagFilter = useTagFilter(params);
   const {
-    accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, spending, paceChartPoints, canCompare,
+    accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, receivableGroups, spending, paceChartPoints, canCompare,
     balanceHistory, balanceChartPoint, failedConnections, failedInvestments, investments, live,
   } = useFinancialReports();
   const currentDay = Number(asOf.slice(8));
   const balances = summarizeBalances(accountBalances(accounts));
   const cards = summarizeCards(cardList);
-  const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected) : spending;
+  const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected, receivableGroups, live) : spending;
   const categoryPeriods = planningMonths.map(month => categoryBreakdown(monthlySpending, month));
   const pacePoints = paceChartPoints(currentMonth, monthlySpending);
   const comparison = canCompare(currentMonth);
