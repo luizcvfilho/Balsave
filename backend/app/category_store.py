@@ -14,6 +14,10 @@ class CategoryNotFound(ValueError):
     """The category or owner is unavailable in the requested scope."""
 
 
+class CategoryProtected(ValueError):
+    """An initial category cannot be deleted."""
+
+
 class CategoryConflict(ValueError):
     """A category name conflicts with another category owned by this user."""
 
@@ -128,13 +132,16 @@ def update_category(
     return _category(row)
 
 
-def assignments(connection: psycopg.Connection, owner: UUID) -> dict[str, str]:
-    return {row[0]: str(row[1]) for row in connection.execute(
+def assignments(connection: psycopg.Connection, owner: UUID) -> dict[str, str | None]:
+    return {entry_id: str(category_id) if category_id is not None else None for entry_id, category_id in connection.execute(
         "SELECT entry_id, category_id FROM balsave.transaction_category_assignments WHERE user_id = %s", (owner,),
     ).fetchall()}
 
 
-def set_assignment(connection: psycopg.Connection, owner: UUID, entry_id: str, category_id: UUID | None) -> None:
+def set_assignment(
+    connection: psycopg.Connection, owner: UUID, entry_id: str, category_id: UUID | None,
+    *, unclassified: bool = False, previous_category_id: UUID | None = None,
+) -> None:
     """Store an assignment after the service verifies the live transaction owner."""
     if not re.fullmatch(r"[0-9a-f-]{36}\.[0-9a-f-]{36}", entry_id):
         raise ValueError("The transaction reference is invalid.")
@@ -144,23 +151,68 @@ def set_assignment(connection: psycopg.Connection, owner: UUID, entry_id: str, c
             raise ValueError
     except ValueError:
         raise ValueError("The transaction reference is invalid.") from None
+    if unclassified and category_id is not None:
+        raise ValueError("An unclassified transaction cannot have a category ID.")
     _lock_owner(connection, owner)
-    if category_id is None:
+    if category_id is None and not unclassified:
         connection.execute("DELETE FROM balsave.transaction_category_assignments WHERE user_id = %s AND entry_id = %s",
                            (owner, entry_id))
         return
-    category = connection.execute(
-        "SELECT id FROM balsave.categories WHERE user_id = %s AND id = %s AND archived_at IS NULL",
+    if category_id is not None:
+        category = connection.execute(
+            "SELECT id FROM balsave.categories WHERE user_id = %s AND id = %s AND archived_at IS NULL",
+            (owner, category_id),
+        ).fetchone()
+        if category is None:
+            raise CategoryNotFound("The category is unavailable for new assignments.")
+    connection.execute(
+        """INSERT INTO balsave.transaction_category_assignments AS assignment
+        (user_id, entry_id, category_id, previous_categories)
+        VALUES (%s, %s, %s, ARRAY[%s::uuid]) ON CONFLICT (user_id, entry_id)
+        DO UPDATE SET category_id = EXCLUDED.category_id,
+            previous_categories = ARRAY[assignment.category_id] || assignment.previous_categories,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE assignment.category_id IS DISTINCT FROM EXCLUDED.category_id""",
+        (owner, entry_id, category_id, previous_category_id),
+    )
+
+
+def require_deletable(connection: psycopg.Connection, owner: UUID, category_id: UUID) -> None:
+    _lock_owner(connection, owner)
+    row = connection.execute(
+        "SELECT code FROM balsave.categories WHERE user_id = %s AND id = %s",
         (owner, category_id),
     ).fetchone()
-    if category is None:
-        raise CategoryNotFound("The category is unavailable for new assignments.")
+    if row is None:
+        raise CategoryNotFound("The category is unavailable for this owner.")
+    if row[0] is not None:
+        raise CategoryProtected("Initial categories cannot be deleted.")
+
+
+def delete_category(
+    connection: psycopg.Connection, owner: UUID, category_id: UUID, rule_entries: list[str],
+) -> None:
+    require_deletable(connection, owner, category_id)
     connection.execute(
-        """INSERT INTO balsave.transaction_category_assignments (user_id, entry_id, category_id)
-        VALUES (%s, %s, %s) ON CONFLICT (user_id, entry_id)
-        DO UPDATE SET category_id = EXCLUDED.category_id, updated_at = CURRENT_TIMESTAMP""",
-        (owner, entry_id, category_id),
+        """UPDATE balsave.transaction_category_assignments AS assignment
+        SET category_id = (
+            SELECT id FROM balsave.categories
+            WHERE user_id = assignment.user_id AND id = assignment.previous_categories[1]
+            AND id <> %s
+        ), previous_categories = assignment.previous_categories[2:], updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = %s AND category_id = %s""",
+        (category_id, owner, category_id),
     )
+    if rule_entries:
+        connection.execute(
+            """INSERT INTO balsave.transaction_category_assignments (user_id, entry_id, category_id)
+            SELECT %s, entry_id, NULL FROM unnest(%s::text[]) AS affected(entry_id)
+            ON CONFLICT (user_id, entry_id) DO NOTHING""",
+            (owner, rule_entries),
+        )
+    connection.execute("DELETE FROM balsave.category_rules WHERE user_id = %s AND category_id = %s", (owner, category_id))
+    connection.execute("UPDATE balsave.transactions SET category_id = NULL WHERE user_id = %s AND category_id = %s", (owner, category_id))
+    connection.execute("DELETE FROM balsave.categories WHERE user_id = %s AND id = %s", (owner, category_id))
 
 
 def load_catalog(connection: psycopg.Connection) -> tuple[dict[str, dict], datetime | None]:

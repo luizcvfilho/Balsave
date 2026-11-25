@@ -5,7 +5,7 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from app import auth, category_rule_store, category_store, database, pluggy
 from app import pluggy_preview as preview
@@ -34,10 +34,22 @@ class CategoryUpdate(CategoryInput):
     archived: StrictBool | None = None
 
 
+class CategoryDelete(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    categoryId: UUID
+
+
 class TransactionCategory(BaseModel):
     model_config = ConfigDict(extra="forbid")
     entryId: str = Field(pattern=r"^[0-9a-f-]{36}\.[0-9a-f-]{36}$")
     categoryId: UUID | None
+    unclassified: StrictBool = False
+
+    @model_validator(mode="after")
+    def valid_choice(self):
+        if self.unclassified and self.categoryId is not None:
+            raise ValueError("An unclassified transaction cannot have a category ID.")
+        return self
 
     @field_validator("entryId")
     @classmethod
@@ -115,6 +127,33 @@ def update_category(payload: CategoryUpdate, owner: UUID = Depends(auth.require_
     return preview.response({"category": category})
 
 
+@router.post("/category-delete")
+def delete_category(payload: CategoryDelete, owner: UUID = Depends(auth.require_user)):
+    try:
+        items = preview.owner_items(owner)
+        with preview.owner_snapshot_lock(owner), database.connect() as connection:
+            category_store.require_deletable(connection, owner, payload.categoryId)
+            category_id = str(payload.categoryId)
+            rule_entries = []
+            if items and any(rule["enabled"] and rule["categoryId"] == category_id
+                             for rule in category_rule_store.list_rules(connection, owner)):
+                data = preview.owner_snapshot(owner, items, connection)
+                if data.get("failedConnections") or data.get("failedInvestments"):
+                    raise HTTPException(status_code=503, detail="Could not verify all rule assignments")
+                rule_entries = [
+                    entry["id"] for entry in data["transactions"]
+                    if entry.get("categorySource") == "rule" and entry.get("categoryId") == category_id
+                ]
+            category_store.delete_category(connection, owner, payload.categoryId, rule_entries)
+    except category_store.CategoryNotFound:
+        raise HTTPException(status_code=404, detail="The category is unavailable for this owner") from None
+    except category_store.CategoryProtected:
+        raise HTTPException(status_code=409, detail="Initial categories cannot be deleted") from None
+    except (KeyError, psycopg.Error, pluggy.PluggyError):
+        raise HTTPException(status_code=503, detail="Could not delete category") from None
+    return preview.response({"deleted": True})
+
+
 @router.post("/transaction-category")
 def transaction_category(payload: TransactionCategory, owner: UUID = Depends(auth.require_user)):
     try:
@@ -123,8 +162,12 @@ def transaction_category(payload: TransactionCategory, owner: UUID = Depends(aut
             if not items:
                 raise HTTPException(status_code=404, detail="The transaction is unavailable for this owner")
             data = preview.owner_snapshot(owner, items, connection)
-            available_expense(data, payload.entryId)
-            category_store.set_assignment(connection, owner, payload.entryId, payload.categoryId)
+            entry = available_expense(data, payload.entryId)
+            previous = entry.get("categoryId")
+            category_store.set_assignment(
+                connection, owner, payload.entryId, payload.categoryId, unclassified=payload.unclassified,
+                previous_category_id=UUID(previous) if previous else None,
+            )
     except category_store.CategoryNotFound:
         raise HTTPException(status_code=404, detail="The category is unavailable for new assignments") from None
     except (KeyError, psycopg.Error, pluggy.PluggyError):

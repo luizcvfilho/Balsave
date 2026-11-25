@@ -34,7 +34,7 @@ def _automatic(entry: dict, by_code: dict[str, dict]) -> dict:
 
 
 def apply_categories(
-    data: dict, categories: list[dict], assignments: dict[str, str], rules: list[dict] | None = None,
+    data: dict, categories: list[dict], assignments: dict[str, str | None], rules: list[dict] | None = None,
 ) -> dict:
     """Mutate snapshot display fields; a private baseline makes reapplication safe.
 
@@ -50,8 +50,15 @@ def apply_categories(
             continue
         entry.setdefault("_automaticCategory", {field: entry[field] for field in CATEGORY_FIELDS if field in entry})
         entry.pop("categoryRuleId", None)
-        manual = by_id.get(assignments.get(entry["id"]))
-        if manual:
+        entry_id = entry["id"]
+        assigned_id = assignments.get(entry_id)
+        manual = by_id.get(assigned_id) if assigned_id is not None else None
+        if entry_id in assignments and assigned_id is None:
+            entry.update({
+                "category": CATEGORY_NAMES["uncategorized"], "categoryId": None, "categoryKey": "uncategorized",
+                "categorySource": "manual", "categoryNeedsReview": False,
+            })
+        elif manual:
             entry.update({
                 "category": manual["name"], "categoryId": manual["id"],
                 "categoryKey": manual.get("code") or f"custom:{manual['id']}",
@@ -71,7 +78,7 @@ def apply_categories(
                 entry.update(_automatic(entry, by_code))
         else:
             entry.update(_automatic(entry, by_code))
-        expenses[entry["id"]] = entry
+        expenses[entry_id] = entry
 
     for card in data.get("cards", []):
         for plan in card.get("installments", []):
