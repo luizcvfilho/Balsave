@@ -41,11 +41,29 @@ export async function updateTag(viewKey: string | null, payload: { tagId: string
   return { ok: true, tag: data.tag };
 }
 
+export async function deleteTag(viewKey: string | null, payload: { tagId: string }): Promise<Result> {
+  if (!payload || typeof payload.tagId !== "string" || !uuid.test(payload.tagId)) return invalid;
+  const response = await financialRequest("tag-delete", viewKey, payload);
+  if (!response?.ok) return failure(response);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveTransactionTags(viewKey: string | null, payload: { entryId: string; tagIds: string[] }): Promise<Result> {
   if (!payload || typeof payload.entryId !== "string" || !entryId.test(payload.entryId)
     || !Array.isArray(payload.tagIds) || payload.tagIds.length > 100 || payload.tagIds.some(id => typeof id !== "string" || !uuid.test(id))
     || new Set(payload.tagIds).size !== payload.tagIds.length) return invalid;
   const response = await financialRequest("transaction-tags", viewKey, payload);
+  if (!response?.ok) return failure(response);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function setTransactionTag(viewKey: string | null, payload: { entryId: string; tagId: string; assigned: boolean }): Promise<Result> {
+  if (!payload || typeof payload.entryId !== "string" || !entryId.test(payload.entryId)
+    || typeof payload.tagId !== "string" || !uuid.test(payload.tagId) || typeof payload.assigned !== "boolean") return invalid;
+  const response = await financialRequest("transaction-tags", viewKey, payload);
+  if (response?.status === 409) return { ok: false, message: "Este lançamento já tem 100 etiquetas." };
   if (!response?.ok) return failure(response);
   revalidatePath("/", "layout");
   return { ok: true };

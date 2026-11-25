@@ -1,7 +1,7 @@
+import InitColorSchemeScript from "@mui/material/InitColorSchemeScript";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
-import type { Metadata } from "next";
-import symbolDark from "../../../assets/balsave-symbol-dark.svg";
-import symbolLight from "../../../assets/balsave-symbol-light.svg";
+import type { Metadata, Viewport } from "next";
+import symbol from "../../../assets/balsave-symbol.svg";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/playfair-display/wght.css";
 import { Header } from "../components/layout/header";
@@ -10,14 +10,13 @@ import { authEnabled, sessionView } from "../data/session";
 import { BalsaveThemeProvider } from "../theme/theme-provider";
 import "./globals.css";
 
+export const viewport: Viewport = { viewportFit: "cover" };
+
 export const metadata: Metadata = {
   title: "Balsave",
   description: "Controle, patrimônio e evolução.",
   icons: {
-    icon: [
-      { url: symbolLight.src, type: "image/svg+xml" },
-      { url: symbolDark.src, type: "image/svg+xml", media: "(prefers-color-scheme: dark)" },
-    ],
+    icon: [{ url: symbol.src, type: "image/svg+xml" }],
   },
 };
 
@@ -33,8 +32,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     {children}
   </>;
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
       <body>
+        <InitColorSchemeScript attribute='[data-theme="%s"]' />
         <AppRouterCacheProvider options={{ enableCssLayer: true }}>
           <BalsaveThemeProvider>
             {configured ? (

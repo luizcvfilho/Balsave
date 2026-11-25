@@ -112,17 +112,17 @@ export async function revokeSession(viewKey: string | null) {
   }
 }
 
-type FinancialReadPath = "snapshot" | "categories";
+type FinancialReadPath = "snapshot" | "categories" | "tags";
 type FinancialMutationPath = "token" | "connections" | "reconciliation" | "position-links"
-  | "category-create" | "category-update" | "transaction-category"
-  | "tag-create" | "tag-update" | "transaction-tags"
+  | "category-create" | "category-update" | "category-delete" | "transaction-category"
+  | "tag-create" | "tag-update" | "tag-delete" | "transaction-tags"
   | "receivable-plan" | "receivable-link"
   | "category-rule-preview" | "category-rule-save" | "category-rule-update";
 
 export async function financialRequest(path: FinancialReadPath): Promise<Response | undefined>;
 export async function financialRequest(path: FinancialMutationPath, viewKey: string | null, payload?: object): Promise<Response | undefined>;
 export async function financialRequest(path: FinancialReadPath | FinancialMutationPath, viewKey?: string | null, payload?: object) {
-  const method = path === "snapshot" || path === "categories" ? "GET" : "POST";
+  const method = path === "snapshot" || path === "categories" || path === "tags" ? "GET" : "POST";
   if (method === "POST" && !await hasTrustedOrigin()) return new Response(null, { status: 403 });
   if (!authEnabled()) return;
   const sessionId = await currentSessionId();

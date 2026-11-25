@@ -71,13 +71,13 @@ npm --prefix frontend run build
 
 Leave `BALSAVE_AUTH_SECRET` unset to explore the demo dashboard and all detail pages with sample data. The fixture in [`frontend/src/data/mock-data.ts`](frontend/src/data/mock-data.ts) uses synthetic account balances, card limits and endings, and categorized transactions. The reporting date is fixed at November 14, 2026, in `America/Sao_Paulo`. Transaction history begins in June 2026, so the first run already has previous months for comparison. Edit the fixture to change the examples.
 
-From the dashboard, select “Ver detalhes” in “Lançamentos recentes” to open “Lançamentos”.
+Open “Extrato” in the main navigation to see “Lançamentos”. The “Banco” and “Cartão” filters work alongside the period, movement type and search. Choosing a bank limits the card options to that institution.
 
 | Scenario | Where to find it |
 | --- | --- |
 | Everyday expenses | Open “Lançamentos” and select November 2026 in “Período”. The ledger includes groceries, rent, and fuel alongside bank and credit card entries. |
 | Event spanning categories | In the same period, enter `Mostra de cinema` in “Buscar lançamentos”. The three results use “Alimentação”, “Lazer”, and “Transporte”. The event tag appears in the ledger and in each transaction's details. |
-| Partial refund in a later month | Open “Lançamentos” → “Reembolsos” and select “Parciais” in “Status”. “Hotel” shows the R$ 800,00 purchase on October 30, the R$ 500,00 credit on November 11, and the R$ 300,00 still pending. The credit appears in the November account statement, and the net expense remains in October. |
+| Partial refund in a later month | Open “Extrato” → “A receber” and select “Parciais” in “Status”. “Hotel” shows the R$ 800,00 purchase on October 30, the R$ 500,00 credit on November 11, and the R$ 300,00 still pending. The credit appears in the November account statement, and the net expense remains in October. |
 
 “Ritmo de gastos” and “Gastos por categoria” share the same net expense calculation. Expenses are categorized from their merchant type, and linked refunds reduce the original expense as of the reporting date. The daily comparison uses the previous three calendar months. For shorter months, it carries their closing total forward to the remaining days. The balance chart shows the last calendar day of each completed month. “Saldo em contas” displays the current balance.
 
@@ -85,11 +85,11 @@ From the dashboard, select “Ver detalhes” in “Lançamentos recentes” to 
 
 “Parcelas previstas” shows estimated dates and amounts separately in “Gastos por categoria” and “Cartões”. “Aguardando lançamento” marks a forecast whose estimated date has arrived. Forecasts have their own total.
 
-Use “Ver detalhes” to open the spending, account, card, or transaction report. Detail links carry the selected period, category, institution, card, or chart point in the URL. Spending reports share the dashboard's refund calculation, and account history uses the same balance snapshots for consolidated and institution-level views. The card fixtures specify invoice membership and due dates separately from purchase dates.
+Use “Ver extrato”, “Ver gastos”, or “Ver contas” on the dashboard to open the corresponding report. Detail links carry the selected period, category, institution, card, or chart point in the URL. Spending reports share the dashboard's refund calculation, and account history uses the same balance snapshots for consolidated and institution-level views. The card fixtures specify invoice membership and due dates separately from purchase dates.
 
-In “Lançamentos” → “Reembolsos”, users can track pending, partial, and completed reimbursements and open the original purchase or individual receipts. Income and refund details support free-text classifications and tags. These annotations are stored in the current browser for the mock dataset and can be found through “Buscar lançamentos”.
+In the demo, “Extrato” → “A receber” shows pending, partial, and completed reimbursements and links to the original purchase and individual receipts. Income and refund details support free-text classifications and tags. These annotations are stored in the current browser for the mock dataset and can be found through “Buscar lançamentos”.
 
-Use “A receber” in the main navigation to track planned amounts, posted credits, and pending balances. With a Meu Pluggy connection, open an imported expense in “Lançamentos” and select “Definir valores a receber”. Enter the payers and amounts, or use “Dividir igualmente” to split the expense and optionally include your own share. From “A receber”, open the expense to link a posted credit and choose how much of the credit to use. You can also start from the credit using “Vincular a uma despesa”, including when no amount was planned. The spending reports use confirmed receipts to update the original month's net expense. Account statements keep the original transaction amounts and dates.
+With a Meu Pluggy connection, open an imported expense in “Lançamentos” and select “Definir valores a receber”. Enter the payers and amounts, or use “Dividir igualmente” to split the expense and optionally include your own share. From “Extrato” → “A receber”, open the expense to link a posted credit and choose how much of the credit to use. You can also start from the credit using “Vincular a uma despesa”, including when no amount was planned. The spending reports use confirmed receipts to update the original month's net expense. Account statements keep the original transaction amounts and dates.
 
 ## Database migrations
 

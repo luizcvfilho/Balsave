@@ -23,6 +23,7 @@ type Props = {
   axisLabel: string;
   zeroBased?: boolean;
   compareToReference?: boolean;
+  periodButtons?: boolean;
 };
 
 type Comparison = "above" | "below" | "equal";
@@ -84,7 +85,7 @@ function chartScale(values: number[], zeroBased: boolean) {
 
 export function LineChart({
   points, series, axisIndices, initialIndex, selectedIndex: controlledIndex, axisLabel, onSelect,
-  zeroBased = false, compareToReference = false,
+  zeroBased = false, compareToReference = false, periodButtons = false,
 }: Props) {
   const [localIndex, setSelectedIndex] = useState(initialIndex);
   const selectedIndex = controlledIndex ?? localIndex;
@@ -92,8 +93,8 @@ export function LineChart({
   const lastIndex = points.length - 1;
   const values = points.flatMap(point => point.values.filter(value => value !== null));
   const { start, end, ticks } = chartScale(values, zeroBased);
-  const x = (index: number) => index / Math.max(1, lastIndex) * 100;
-  const y = (value: number) => (end - value) / (end - start) * 100;
+  const x = (index: number) => (periodButtons ? 3 : 0) + index / Math.max(1, lastIndex) * (periodButtons ? 94 : 100);
+  const y = (value: number) => (periodButtons ? 8 : 0) + (end - value) / (end - start) * (periodButtons ? 84 : 100);
   const actualIndex = series.findIndex(({ style }) => style === "actual");
   const referenceIndex = series.findIndex(({ style }) => style === "reference");
 
@@ -115,8 +116,10 @@ export function LineChart({
   }
 
   function selectPoint(event: PointerEvent<HTMLDivElement>) {
+    if (lastIndex < 1) return;
     const { left, width } = event.currentTarget.getBoundingClientRect();
-    const relativeX = Math.min(1, Math.max(0, (event.clientX - left) / width));
+    const offset = ((event.clientX - left) / width * 100 - x(0)) / (x(lastIndex) - x(0));
+    const relativeX = Math.min(1, Math.max(0, offset));
     selectIndex(Math.round(relativeX * lastIndex));
   }
 
@@ -132,8 +135,8 @@ export function LineChart({
   }
 
   return (
-    <figure className="line-chart" aria-label={axisLabel}>
-      <figcaption className="chart-readout" aria-live="polite" aria-atomic="true">
+    <figure className={periodButtons ? "line-chart line-chart-periods" : "line-chart"} aria-label={axisLabel}>
+      {!periodButtons && <figcaption className="chart-readout" aria-live="polite" aria-atomic="true">
         <p className="chart-date">{selected.label}</p>
         <div className="chart-legend">
           {series.map(({ label, style }, index) => {
@@ -150,7 +153,7 @@ export function LineChart({
           })}
         </div>
         {compareToReference && <p className={`chart-comparison${selectedState}`}>{selectedLabel}</p>}
-      </figcaption>
+      </figcaption>}
 
       <div className="chart-grid">
         <div className="chart-axis-y" aria-hidden="true">
@@ -162,7 +165,6 @@ export function LineChart({
             {ticks.map(value => (
               <line key={value} className="chart-gridline" x1="0" x2="100" y1={y(value)} y2={y(value)} vectorEffect="non-scaling-stroke" />
             ))}
-            <line className="chart-guide" x1={x(selectedIndex)} x2={x(selectedIndex)} y1="0" y2="100" vectorEffect="non-scaling-stroke" />
             {series.map(({ style }, seriesIndex) => {
               if (compareToReference && style === "actual") {
                 return Object.entries(comparisonSegments(comparisonPoints)).map(([state, segments]) => (
@@ -181,15 +183,14 @@ export function LineChart({
                 const cents = amounts[seriesIndex];
                 return cents === null ? [] : [`${x(index)},${y(cents)}`];
               });
-              return (
-                <polyline
-                  key={style}
-                  className={`chart-line chart-${style}`}
-                  points={positions.join(" ")}
-                  vectorEffect="non-scaling-stroke"
-                />
-              );
+              return <g key={style}>
+                {periodButtons && positions.length > 1 && (
+                  <polygon className="chart-fill" points={`${x(0)},92 ${positions.join(" ")} ${x(lastIndex)},92`} />
+                )}
+                <polyline className={`chart-line chart-${style}`} points={positions.join(" ")} vectorEffect="non-scaling-stroke" />
+              </g>;
             })}
+            <line className="chart-guide" x1={x(selectedIndex)} x2={x(selectedIndex)} y1="0" y2="100" vectorEffect="non-scaling-stroke" />
           </svg>
           {series.map(({ style }, index) => {
             const cents = selected.values[index];
@@ -203,6 +204,15 @@ export function LineChart({
             );
           })}
         </div>
+        {periodButtons ? (
+          <div className="chart-period-buttons">
+            {points.map((point, index) => (
+              <button key={point.label} type="button" aria-pressed={selectedIndex === index}
+                aria-label={pointSummary(index)} style={{ left: `${x(index)}%` }}
+                onClick={() => selectIndex(index)}>{point.axisLabel}</button>
+            ))}
+          </div>
+        ) : <>
         <div className="chart-axis-x" aria-hidden="true">
           {axisIndices.map((index, tickIndex) => (
             <span key={index} className={tickIndex % 2 === 1 && index !== lastIndex ? "chart-extra-tick" : undefined}
@@ -222,7 +232,11 @@ export function LineChart({
           onChange={(_, value) => selectIndex(value)}
           sx={{ gridColumn: 2, alignSelf: "center", minHeight: 44, boxSizing: "border-box" }}
         />
+        </>}
       </div>
+      {periodButtons && <figcaption className="chart-period-readout" aria-live="polite" aria-atomic="true">
+        {selected.axisLabel}, {selected.values[0] === null ? "ainda sem dados" : formatMoney(selected.values[0])}
+      </figcaption>}
     </figure>
   );
 }

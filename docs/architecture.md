@@ -28,6 +28,12 @@ Migration `0010` stores personal tags and their assignments using the owner and 
 
 Migration `0011` stores expected amounts by payer and receipt allocations by owner and provider transaction reference. It keeps amounts in integer BRL cents. FastAPI verifies expenses and posted credits from the owner's snapshot. A database transaction lock serializes each owner's updates across workers. Snapshots re-read these records from PostgreSQL and keep saved references available for review when provider records are unavailable.
 
+Migration `0012` lets an expense category assignment store a null category ID when the owner chooses “Remover categoria”. An expense with this preference appears as “Sem categoria” and is skipped by automatic rules. “Usar classificação automática” deletes the preference and restores normal category resolution. The “Etiquetas” catalog reads saved tags and assignment counts directly from PostgreSQL, including when a bank connection is unavailable.
+
+Migration `0013` lets the application role delete tags. “Excluir etiqueta” removes the owner's tag and its saved assignments in one database transaction. The purchase records are retained.
+
+Migration `0014` records prior local category IDs when an owner changes an imported purchase's classification. Deleting a custom category restores each purchase's immediate prior category if it is still in that owner's catalog. Purchases without a recoverable prior category are explicitly left uncategorized. The same transaction deletes rules that point to the category and clears category references on affected purchases. Initial categories are protected by the service.
+
 ## Amounts and reporting dates
 
 The development plan proposed storing BRL amounts as integer cents in PostgreSQL. The existing ledger schema uses exact `numeric(20,6)` amounts with a currency code and a separate debit or credit direction. This preserves source precision up to six decimal places. Python reads these amounts as `Decimal`. Keep this schema for the foundation. The BRL reporting boundary uses integer cents for the demo and frontend calculations. FastAPI converts supported BRL snapshot amounts to cents with decimal `ROUND_HALF_UP` rounding before sending them to the frontend.
@@ -36,7 +42,7 @@ The development plan proposed storing BRL amounts as integer cents in PostgreSQL
 
 Expected amounts track what is owed. Actual receipts reduce net spending. Each allocated receipt first covers the payer selected for it, then any remainder covers outstanding shares on the same expense. Amounts above the total planned reimbursement are surplus and do not reduce the owner's share. Direct reimbursements with no plan can cover the entire expense. Cash flow keeps each original transaction amount and date.
 
-“Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Painel financeiro” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
+“Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Visão geral” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
 
 ## Starting history
 

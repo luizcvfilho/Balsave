@@ -331,6 +331,54 @@ class CategoryApiTests(TestCase):
         self.assertEqual(self.request("GET", "snapshot")[1]["data"]["transactions"][0]["category"], "Trabalho")
         self.assertEqual(self.request("POST", "transaction-category", {"entryId": ENTRY, "categoryId": category["id"]})[0], 404)
 
+    def test_removing_a_category_suppresses_automatic_rules_until_restored(self):
+        draft = self.rule_draft()
+        rule = self.save_rule(draft)
+        remove = {"entryId": ENTRY, "categoryId": None, "unclassified": True}
+        self.assertEqual(self.request("POST", "transaction-category", {**remove, "categoryId": draft["categoryId"]})[0], 422)
+        self.assertEqual(self.request("POST", "transaction-category", remove, token=self.other_token)[0], 404)
+        self.assertEqual(self.request("POST", "transaction-category", remove)[0], 200)
+        preview.snapshot_cache.clear()
+        _, result = self.request("GET", "snapshot")
+        entry = result["data"]["transactions"][0]
+        self.assertEqual((entry["category"], entry["categoryId"], entry["categorySource"]), ("Sem categoria", None, "manual"))
+        self.assertNotIn("categoryRuleId", entry)
+        self.assertEqual(entry["amountCents"], 1001)
+        _, result = self.request("POST", "category-rule-preview", draft)
+        self.assertEqual((result["preview"]["affectedCount"], result["preview"]["manualCount"]), (0, 1))
+        self.assertEqual(self.request("POST", "transaction-category", {"entryId": ENTRY, "categoryId": None})[0], 200)
+        _, result = self.request("GET", "snapshot")
+        self.assertEqual(result["data"]["transactions"][0]["categoryRuleId"], rule["id"])
+
+    def test_deleting_custom_categories_restores_previous_choices_in_order(self):
+        initial = self.request("GET", "snapshot")[1]["data"]["transactions"][0]["categoryId"]
+        first, second = (self.create(name)["id"] for name in ("Primeira", "Segunda"))
+        self.assertEqual(self.request("POST", "category-delete", {"categoryId": initial})[0], 409)
+        self.assertEqual(self.request("POST", "category-delete", {"categoryId": self.foreign_category})[0], 404)
+        for category in (first, second, second):
+            self.assertEqual(self.request("POST", "transaction-category", {"entryId": ENTRY, "categoryId": category})[0], 200)
+        for category, expected in ((second, first), (first, initial)):
+            self.assertEqual(self.request("POST", "category-delete", {"categoryId": category})[0], 200)
+            entry = self.request("GET", "snapshot")[1]["data"]["transactions"][0]
+            self.assertEqual((entry["categoryId"], entry["amountCents"]), (expected, 1001))
+
+    def test_deleting_a_category_with_missing_history_or_rule_marks_expense_unclassified(self):
+        legacy = self.create("Legada")["id"]
+        with psycopg.connect(DATABASE_URL) as connection:
+            connection.execute(
+                "INSERT INTO balsave.transaction_category_assignments (user_id, entry_id, category_id) VALUES (%s, %s, %s)",
+                (self.owner, ENTRY, legacy),
+            )
+        self.assertEqual(self.request("POST", "category-delete", {"categoryId": legacy})[0], 200)
+        entry = self.request("GET", "snapshot")[1]["data"]["transactions"][0]
+        self.assertEqual((entry["category"], entry["categorySource"]), ("Sem categoria", "manual"))
+        self.assertEqual(self.request("POST", "transaction-category", {"entryId": ENTRY, "categoryId": None})[0], 200)
+        rule = self.save_rule(self.rule_draft())
+        self.assertEqual(self.request("POST", "category-delete", {"categoryId": rule["categoryId"]})[0], 200)
+        data = self.request("GET", "snapshot")[1]["data"]
+        self.assertEqual(data["transactions"][0]["category"], "Sem categoria")
+        self.assertEqual(data["categoryRules"], [])
+
     def test_cross_owner_categories_entries_and_non_expenses_are_rejected(self):
         self.assertEqual(self.request("POST", "category-update", {"categoryId": self.foreign_category, "archived": True})[0], 404)
         self.assertEqual(self.request("POST", "transaction-category", {"entryId": ENTRY, "categoryId": self.foreign_category})[0], 404)
@@ -374,6 +422,32 @@ class CategoryApiTests(TestCase):
         for path, payload in (("tag-create", {"name": "A"}), ("tag-update", {"tagId": tag["id"], "name": "A"}), ("transaction-tags", {"entryId": ENTRY, "tagIds": []})):
             self.assertEqual(self.request("POST", path, payload, token="")[0], 401)
             self.assertEqual(self.request("POST", path, payload, secret="")[0], 403)
+
+    def test_deleting_a_tag_cascades_only_the_owners_association(self):
+        deleted = self.request("POST", "tag-create", {"name": "Excluir"})[1]["tag"]
+        kept = self.request("POST", "tag-create", {"name": "Manter"})[1]["tag"]
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagIds": [deleted["id"], kept["id"]]})[0], 200)
+        payload = {"tagId": deleted["id"]}
+        self.assertEqual(self.request("POST", "tag-delete", payload, token="")[0], 401)
+        self.assertEqual(self.request("POST", "tag-delete", payload, token=self.other_token)[0], 404)
+        self.assertEqual(self.request("POST", "tag-delete", payload)[0], 200)
+        self.assertEqual(self.request("POST", "tag-delete", payload)[0], 404)
+        self.assertEqual(self.request("GET", "tags")[1]["tags"], [kept])
+        self.assertEqual(self.request("GET", "snapshot")[1]["data"]["transactions"][0]["tagIds"], [kept["id"]])
+
+    def test_tag_catalog_counts_saved_links_and_single_updates_preserve_other_tags(self):
+        home = self.request("POST", "tag-create", {"name": "Casa"})[1]["tag"]
+        work = self.request("POST", "tag-create", {"name": "Trabalho"})[1]["tag"]
+        foreign = self.request("POST", "tag-create", {"name": "Outro"}, token=self.other_token)[1]["tag"]
+        for tag in (home, work, work):
+            self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagId": tag["id"], "assigned": True})[0], 200)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagId": foreign["id"], "assigned": False})[0], 404)
+        self.assertEqual(self.request("POST", "transaction-tags", {"entryId": ENTRY, "tagId": home["id"], "assigned": False})[0], 200)
+        self.assertEqual(self.request("GET", "snapshot")[1]["data"]["transactions"][0]["tagIds"], [work["id"]])
+        with patch.object(preview, "owner_items", side_effect=AssertionError("The tag catalog must not load transactions")):
+            self.assertEqual(self.request("GET", "tags"), (200, {"tags": [home, work], "usageByTag": {home["id"]: 0, work["id"]: 1}}))
+            self.assertEqual(self.request("GET", "tags", token=self.other_token), (200, {"tags": [foreign], "usageByTag": {foreign["id"]: 0}}))
+        self.assertEqual(self.request("GET", "tags", token="")[0], 401)
 
     def rule_draft(self, **changes):
         return {"categoryId": self.create()["id"], "description": "Equipment", "matchType": "exact", "accountId": None,

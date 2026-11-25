@@ -1,8 +1,6 @@
 "use client";
 
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
-import Container from "@mui/material/Container";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -13,13 +11,16 @@ import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
 import { RecentTransactions } from "../../components/dashboard/recent-transactions";
 import { SpendingCategories } from "../../components/dashboard/spending-categories";
+import { ReportSelect } from "../../components/details/report-filters";
+import { FinancialFooter, PageHeading } from "../../components/details/report-layout";
 import { useReportQuery } from "../../components/details/report-query";
 import { TagFilter, useTagFilter } from "../../components/details/tag-filter";
 import { accountBalances, cardLabel } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
-import { categoryBreakdown, matchesTransactionTags, spendingByMonth, summarizeBalances, summarizeCards } from "../../lib/finance";
-import { formatAvailableMoney, formatDate, formatMoney, formatMonthName, formatPercent } from "../../lib/format";
+import { categoryBreakdown, daysInMonth, matchesTransactionTags, previousMonths, spendingByMonth, summarizeBalances, summarizeCards, transactionTotals } from "../../lib/finance";
+import { formatAvailableMoney, formatDate, formatMoney, formatMonthName, formatPercent, formatShortMonth, formatSignedMoney } from "../../lib/format";
 import { optionValue, reportHref } from "../../lib/report-links";
+import "./dashboard-page.css";
 
 const twoColumns = "repeat(2, minmax(0, 1fr))";
 
@@ -27,27 +28,46 @@ export function DashboardPage() {
   const { params, update } = useReportQuery();
   const tagFilter = useTagFilter(params);
   const {
-    accounts, asOf, cards: cardList, planningMonths, plannedInstallments, currentMonth, reportedTransactions, receivableGroups, spending, paceChartPoints, canCompare,
-    balanceHistory, balanceChartPoint, failedConnections, failedInvestments, investments, live,
+    accounts, asOf, cards: cardList, positions, planningMonths, planningMonthOptions, plannedInstallments, currentMonth, reportedTransactions, receivableGroups, spending, paceChartPoints, canCompare,
+    balanceHistory, balanceChartPoint, failedConnections, failedInvestments, live,
   } = useFinancialReports();
   const currentDay = Number(asOf.slice(8));
   const balances = summarizeBalances(accountBalances(accounts));
   const cards = summarizeCards(cardList);
   const monthlySpending = tagFilter.selected.size ? spendingByMonth(reportedTransactions, asOf, tagFilter.selected, receivableGroups, live) : spending;
-  const categoryPeriods = planningMonths.map(month => categoryBreakdown(monthlySpending, month));
   const pacePoints = paceChartPoints(currentMonth, monthlySpending);
   const comparison = canCompare(currentMonth);
   const evolution = balanceHistory();
-  const history = evolution.points.slice(-6);
-  const balancePoints = history.map(balanceChartPoint);
-  const latest = reportedTransactions.filter(transaction => transaction.date.startsWith(currentMonth)
-    && matchesTransactionTags(transaction, tagFilter.selected)).reverse();
-  const recentTransactions = live ? latest.slice(0, 10) : latest;
   const month = optionValue(params.get("mes"), planningMonths, currentMonth);
+  const categoryPeriod = categoryBreakdown(monthlySpending, month);
+  const monthTransactions = reportedTransactions.filter(transaction => transaction.date.startsWith(month)
+    && matchesTransactionTags(transaction, tagFilter.selected));
+  const consolidatedBalance = positions.length && positions.every(position => position.balanceCents !== null)
+    ? summarizeBalances(accountBalances(positions)).totalCents : null;
+  const currentPoint = consolidatedBalance !== null && !evolution.partial && month >= currentMonth
+    ? { month: currentMonth, cents: consolidatedBalance } : undefined;
+  const history = evolution.points.filter(point => point.month <= month);
+  if (currentPoint) history.push(currentPoint);
+  const balanceSeries = history.slice(-6);
+  const balancePoints = balanceSeries.map(point => point === currentPoint ? {
+    axisLabel: formatShortMonth(currentMonth),
+    label: `Saldo em ${formatDate(asOf)}`,
+    values: [point.cents],
+  } : balanceChartPoint(point));
+  const lastBalance = balanceSeries.at(-1);
+  const previousBalance = balanceSeries.at(-2);
+  const displayedBalance = month >= currentMonth ? consolidatedBalance : lastBalance?.month === month ? lastBalance.cents : null;
+  const variation = displayedBalance !== null && lastBalance && previousBalance && previousBalance.cents > 0
+    && previousMonths(lastBalance.month, 1)[0] === previousBalance.month
+    && (month < currentMonth || currentPoint)
+    ? (displayedBalance - previousBalance.cents) / previousBalance.cents : null;
   const plannedCents = tagFilter.selected.size ? 0
     : plannedInstallments.reduce((sum, plan) => sum + (plan.date.startsWith(month) ? plan.amountCents : 0), 0);
   const [paceIndex, setPaceIndex] = useState(currentDay - 1);
-  const [balanceIndex, setBalanceIndex] = useState(history.length - 1);
+  const [selectedBalanceMonth, setSelectedBalanceMonth] = useState<string>();
+  const selectedBalanceIndex = balanceSeries.findIndex(point => point.month === selectedBalanceMonth);
+  const balanceIndex = selectedBalanceIndex >= 0 ? selectedBalanceIndex : balanceSeries.length - 1;
+  const selectedChartMonth = balanceSeries[balanceIndex]?.month;
 
   function details(path: string, values: Record<string, string | undefined> = {}) {
     return reportHref(path, {
@@ -57,33 +77,84 @@ export function DashboardPage() {
     });
   }
 
+  const monthlyTotals = transactionTotals(monthTransactions);
+  const ledgerValues = { mes: month >= currentMonth ? undefined : month };
+  const monthlyDescription = month <= currentMonth
+    ? `1 a ${month === currentMonth ? currentDay : daysInMonth(month)} de ${formatMonthName(month)}`
+    : formatMonthName(month);
+
   const cardUsage = cards.usedCents !== null && cards.limitCents !== null && cards.limitCents > 0
     ? cards.usedCents / cards.limitCents : null;
 
   return (
-    <Container
-      component="main"
-      maxWidth="lg"
-      sx={{ display: "grid", gap: 2.5, py: { xs: 3, md: 6 } }}
-    >
-      <Stack direction="row" useFlexGap spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div>
-          <Typography variant="h1" color="primary.main">Painel financeiro</Typography>
-          <Typography variant="body2" color="var(--text-secondary)" sx={{ mt: 1 }}>
-            <time dateTime={asOf}>{formatDate(asOf)}</time>
-          </Typography>
-        </div>
-        <Chip
-          label={live ? "Dados do Meu Pluggy" : "Dados fictícios"}
-          size="small"
-          sx={{ bgcolor: "var(--surface-muted)", color: "var(--text-secondary)", fontWeight: 600 }}
-        />
-      </Stack>
+    <main className="balsave-shell dashboard-layout">
+      <PageHeading title="Visão geral" description="Acompanhe suas contas, seus gastos e a evolução do saldo."
+        controls={<div className="report-filters report-heading-filters">
+          <ReportSelect label="Período" variant="period" value={month} options={planningMonthOptions}
+            onChange={value => {
+              setSelectedBalanceMonth(undefined);
+              update({ mes: value === currentMonth ? undefined : value });
+            }} />
+          <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
+        </div>} />
 
       {failedConnections > 0 && (
         <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>
       )}
       {!!failedInvestments && <p className="report-muted" role="status">Alguns investimentos estão indisponíveis. O saldo consolidado pode estar incompleto.</p>}
+
+      <div className="dashboard-overview">
+        <SectionCard
+          id="evolucao"
+          className="dashboard-balance"
+          title={month < currentMonth && evolution.partial ? "Saldo das contas com histórico" : "Saldo consolidado"}
+          href={details("/contas", { aba: "evolucao", ponto: selectedChartMonth === currentMonth ? undefined : selectedChartMonth })}
+          linkLabel="Ver contas"
+          description="Contas e investimentos acompanhados"
+        >
+          <p className="dashboard-balance-amount">{formatAvailableMoney(displayedBalance)}</p>
+          {variation !== null && (
+            <p className="dashboard-balance-change">
+              <span data-loss={variation < 0 || undefined}><span aria-hidden="true">{variation < 0 ? "↘" : "↗"}</span> {variation > 0 ? "+" : ""}{formatPercent(variation)}</span>
+              em relação ao mês anterior
+            </p>
+          )}
+          {balancePoints.length > 1 ? <LineChart
+            points={balancePoints}
+            series={[{ label: evolution.partial ? "Saldo das contas com histórico" : "Saldo consolidado", style: "actual" }]}
+            axisIndices={balancePoints.map((_, index) => index)}
+            initialIndex={balancePoints.length - 1}
+            selectedIndex={balanceIndex}
+            onSelect={index => setSelectedBalanceMonth(balanceSeries[index].month)}
+            axisLabel="Mês no gráfico de evolução do saldo"
+            periodButtons
+          /> : <p className="report-muted">{evolution.emptyMessage}</p>}
+          {evolution.description && <p className="dashboard-balance-note">{evolution.description}</p>}
+        </SectionCard>
+
+        <SectionCard id="resumo-mes" className="dashboard-summary" title="Resumo do mês" description={monthlyDescription} highlighted>
+          <dl className="dashboard-monthly">
+            <div><dt><span aria-hidden="true">↙</span>Entradas</dt><dd>{formatSignedMoney(monthlyTotals.incomingCents)}</dd></div>
+            <div><dt><span aria-hidden="true">↗</span>Saídas</dt><dd>{formatSignedMoney(-monthlyTotals.outgoingCents)}</dd></div>
+            <div><dt><span aria-hidden="true"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h4l2.5-6L14 18l2.5-6H21" /></svg></span>Saldo do mês</dt><dd>{formatMoney(monthlyTotals.netCents)}</dd></div>
+          </dl>
+          <Link className="report-link financial-panel-link dashboard-summary-link" href={details("/lancamentos", ledgerValues)}>
+            Explorar extrato <span aria-hidden="true">→</span>
+          </Link>
+        </SectionCard>
+        <RecentTransactions
+          month={month}
+          transactions={monthTransactions}
+          getHref={id => details("/lancamentos", { ...ledgerValues, lancamento: id })}
+        />
+        <SpendingCategories
+          period={categoryPeriod}
+          getHref={category => details("/gastos", { mes: month, categoria: category })}
+          installmentsHref={details("/gastos", { mes: month, compra: "parcelada" })}
+          plannedCents={plannedCents}
+          plannedHref={`${details("/gastos", { mes: month, compra: "parcelada" })}#parcelas-previstas`}
+        />
+      </div>
 
       <Box sx={{ display: "grid", gap: "inherit", gridTemplateColumns: { sm: twoColumns } }}>
         <MetricCard
@@ -138,60 +209,27 @@ export function DashboardPage() {
         />
       </Box>
 
-      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
-      <Box sx={{ display: "grid", gap: "inherit", gridTemplateColumns: { md: "minmax(0, 1.45fr) minmax(0, 1fr)" } }}>
-        <SectionCard
-          id="ritmo"
-          title="Ritmo de gastos"
-          href={details("/gastos", { aba: "ritmo", dia: String(paceIndex + 1) })}
-          description="Gasto líquido acumulado por dia do mês"
-        >
-          <LineChart
-            points={pacePoints}
-            series={[
-              { label: formatMonthName(currentMonth), style: "actual" },
-              ...(comparison ? [{ label: "Média dos 3 meses anteriores", style: "reference" } as const] : []),
-            ]}
-            axisIndices={[0, 6, 13, 20, pacePoints.length - 1]}
-            initialIndex={currentDay - 1}
-            onSelect={setPaceIndex}
-            axisLabel="Dia do mês no gráfico de ritmo de gastos"
-            zeroBased
-            compareToReference={comparison}
-          />
-        </SectionCard>
-        <SpendingCategories
-          periods={categoryPeriods}
-          asOf={asOf}
-          month={month}
-          onMonthChange={value => update({ mes: value === currentMonth ? undefined : value })}
-          getHref={category => details("/gastos", { mes: month, categoria: category })}
-          installmentsHref={details("/gastos", { mes: month, compra: "parcelada" })}
-          plannedCents={plannedCents}
-          plannedHref={`${details("/gastos", { mes: month, compra: "parcelada" })}#parcelas-previstas`}
-        />
-      </Box>
-
       <SectionCard
-        id="evolucao"
-        title={investments.length ? "Evolução de contas e investimentos" : "Evolução do saldo em contas"}
-        href={details("/contas", { aba: "evolucao", ponto: history[balanceIndex]?.month })}
-        description={evolution.description ?? (history.length > 1 ? "Saldo no último dia de cada mês" : undefined)}
+        id="ritmo"
+        title="Ritmo de gastos"
+        href={details("/gastos", { aba: "ritmo", dia: String(paceIndex + 1) })}
+        description="Gasto líquido acumulado por dia do mês"
       >
-        {balancePoints.length > 1 ? <LineChart
-          points={balancePoints}
-          series={[{ label: evolution.partial ? "Saldo das contas com histórico" : "Saldo consolidado", style: "actual" }]}
-          axisIndices={balancePoints.map((_, index) => index)}
-          initialIndex={balancePoints.length - 1}
-          onSelect={setBalanceIndex}
-          axisLabel="Mês no gráfico de evolução do saldo"
-        /> : <p className="report-muted">{evolution.emptyMessage}</p>}
+        <LineChart
+          points={pacePoints}
+          series={[
+            { label: formatMonthName(currentMonth), style: "actual" },
+            ...(comparison ? [{ label: "Média dos 3 meses anteriores", style: "reference" } as const] : []),
+          ]}
+          axisIndices={[0, 6, 13, 20, pacePoints.length - 1]}
+          initialIndex={currentDay - 1}
+          onSelect={setPaceIndex}
+          axisLabel="Dia do mês no gráfico de ritmo de gastos"
+          zeroBased
+          compareToReference={comparison}
+        />
       </SectionCard>
-
-      <RecentTransactions
-        transactions={recentTransactions}
-        getHref={id => details("/lancamentos", { lancamento: id })}
-      />
-    </Container>
+      <FinancialFooter live={live} />
+    </main>
   );
 }

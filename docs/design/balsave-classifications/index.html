@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Protótipo interativo do extrato, das categorias, das regras e das etiquetas do Balsave.">
+  <title>Lançamentos · Balsave</title>
+  <link rel="icon" href="../balsave-identity/balsave-symbol.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../../assets/balsave-theme.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Ir para o conteúdo</a>
+  <header class="app-header">
+    <div class="shell header-inner">
+      <a class="brand" href="#extrato" aria-label="Balsave, extrato">
+        <img class="logo-light" src="../../../assets/balsave-logo-light.svg" alt="" width="137" height="36">
+        <img class="logo-dark" src="../../../assets/balsave-logo-dark.svg" alt="" width="137" height="36">
+      </a>
+      <nav aria-label="Navegação do protótipo">
+        <a href="#extrato" data-nav="extrato"><span data-icon="statement"></span>Extrato</a>
+        <a href="#categorias" data-nav="categorias"><span data-icon="layers"></span><span>Categorias<span class="nav-long"> e regras</span></span></a>
+        <a href="#etiquetas" data-nav="etiquetas"><span data-icon="tag"></span>Etiquetas</a>
+      </nav>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Ativar tema escuro"></button>
+    </div>
+  </header>
+
+  <main class="shell main" id="conteudo" tabindex="-1"></main>
+  <footer class="shell footer">
+    <span>Protótipo com dados fictícios</span>
+    <span>Controle, patrimônio e evolução.</span>
+  </footer>
+
+  <section class="picker" id="picker" role="dialog" aria-labelledby="picker-title" hidden>
+    <header class="picker-header">
+      <div>
+        <h2 id="picker-title"></h2>
+        <p id="picker-transaction"></p>
+      </div>
+      <button class="icon-button picker-close" type="button" data-picker-action="close" aria-label="Fechar seletor"></button>
+    </header>
+    <div class="picker-field search-field">
+      <span data-icon="search"></span>
+      <input type="search" id="picker-search" maxlength="80" autocomplete="off">
+    </div>
+    <div id="picker-content" class="picker-content"></div>
+    <footer class="picker-footer"><a id="picker-manage"></a></footer>
+  </section>
+
+  <dialog id="editor" aria-labelledby="editor-title"></dialog>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <noscript><p class="shell">Ative o JavaScript para testar o protótipo.</p></noscript>
+</body>
+</html>

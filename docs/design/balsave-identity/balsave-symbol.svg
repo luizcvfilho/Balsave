@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Símbolo do Balsave</title>
+  <rect x="1" y="1" width="46" height="46" rx="13" fill="#192720"/>
+  <path d="M13 34.5V13.5h11a6 6 0 0 1 0 12h-5.5m0 9h11a6 6 0 0 0 0-12h-2" fill="none" stroke="#FFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m32.5 15.5 4-4m-4 0h4v4" fill="none" stroke="#A6DBB9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

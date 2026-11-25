@@ -29,6 +29,7 @@ const initialCategories = [
 ];
 let categories;
 let assignment;
+let assignmentHistory;
 let rules;
 let tags;
 let transactionTags;
@@ -64,6 +65,7 @@ async function reset() {
   }
   categories = structuredClone(initialCategories);
   assignment = undefined;
+  assignmentHistory = [];
   rules = [];
   tags = [];
   transactionTags = [];
@@ -87,7 +89,7 @@ function ruleMatches(rule) {
 
 function snapshot() {
   const rule = [...rules].sort((first, second) => first.priority - second.priority).find(item => ruleMatches(item));
-  const category = categories.find(item => item.id === (assignment ?? rule?.categoryId)) ?? categories[1];
+  const category = assignment === null ? null : categories.find(item => item.id === (assignment ?? rule?.categoryId)) ?? categories[1];
   return {
     connected: true,
     data: {
@@ -96,8 +98,9 @@ function snapshot() {
       cards: [],
       transactions: [{
         id: transactionId, accountId, name: "Loja de equipamentos", date: "2026-11-15", kind: "expense", amountCents: 12500,
-        category: category.name, categoryId: category.id, categoryKey: category.code ?? `custom:${category.id}`,
-        categorySource: assignment ? "manual" : rule ? "rule" : "pluggy", providerCategoryId: "08020000", providerCategoryName: "Electronics",
+        category: category?.name ?? "Sem categoria", categoryId: category?.id ?? null,
+        categoryKey: category ? category.code ?? `custom:${category.id}` : "uncategorized",
+        categorySource: assignment !== undefined ? "manual" : rule ? "rule" : "pluggy", providerCategoryId: "08020000", providerCategoryName: "Electronics",
         providerCategoryLabel: "Eletrônicos", categoryNeedsReview: false, tagIds: transactionTags,
       }, ...receivablesEnabled ? receivableEntries.filter(entry => !missingCredit || entry !== receivableEntries[2]) : []],
       receivableGroups,
@@ -128,7 +131,7 @@ function rulePreview(body) {
   const rule = draftRule(body);
   const matches = ruleMatches(rule);
   const fingerprint = createHash("sha256").update(JSON.stringify([rule, assignment, rules])).digest("hex");
-  return { affectedCount: matches && !assignment ? 1 : 0, manualCount: matches && assignment ? 1 : 0, fingerprint };
+  return { affectedCount: matches && assignment === undefined ? 1 : 0, manualCount: matches && assignment !== undefined ? 1 : 0, fingerprint };
 }
 
 function respond(response, status, body) {
@@ -183,6 +186,9 @@ createServer(async (request, response) => {
   if (path === "categories" && request.method === "GET") return respond(response, 200, {
     categories, categoryRules: rules, categoryAccounts: [{ id: accountId, label: "Banco fictício · Conta de teste" }],
   });
+  if (path === "tags" && request.method === "GET") return respond(response, 200, {
+    tags, usageByTag: Object.fromEntries(tags.map(tag => [tag.id, Number(transactionTags.includes(tag.id))])),
+  });
   if (path === "category-create" && request.method === "POST") {
     if (categories.some(category => category.name.toLocaleLowerCase("pt-BR") === body.name?.trim().toLocaleLowerCase("pt-BR"))) {
       return respond(response, 409, { detail: "Category already exists" });
@@ -198,12 +204,27 @@ createServer(async (request, response) => {
     if (body.archived !== undefined) category.archived = body.archived;
     return respond(response, 200, { category });
   }
+  if (path === "category-delete" && request.method === "POST") {
+    const category = categories.find(item => item.id === body.categoryId);
+    if (!category) return respond(response, 404, { detail: "Category unavailable" });
+    if (category.code) return respond(response, 409, { detail: "Initial categories cannot be deleted" });
+    categories = categories.filter(item => item.id !== category.id);
+    if (assignment === category.id) {
+      const previous = assignmentHistory.shift();
+      assignment = categories.find(item => item.id === previous)?.id ?? null;
+    }
+    rules = rules.filter(rule => rule.categoryId !== category.id);
+    return respond(response, 200, { deleted: true });
+  }
   if (path === "transaction-category" && request.method === "POST") {
     if (assignmentConflict) return respond(response, 409, { detail: "Transaction changed" });
     if (body.entryId !== transactionId) return respond(response, 404, { detail: "Transaction unavailable" });
     const category = categories.find(item => item.id === body.categoryId && !item.archived);
     if (body.categoryId !== null && !category) return respond(response, 404, { detail: "Category unavailable" });
-    assignment = body.categoryId ?? undefined;
+    const nextAssignment = body.unclassified ? null : body.categoryId ?? undefined;
+    if (nextAssignment === undefined) assignmentHistory = [];
+    else if (nextAssignment !== assignment) assignmentHistory.unshift(snapshot().data.transactions[0].categoryId);
+    assignment = nextAssignment;
     return respond(response, 200, { saved: true });
   }
   if (path === "tag-create" && request.method === "POST") {
@@ -219,9 +240,18 @@ createServer(async (request, response) => {
     tag.name = body.name.trim();
     return respond(response, 200, { tag });
   }
+  if (path === "tag-delete" && request.method === "POST") {
+    if (!tags.some(tag => tag.id === body.tagId)) return respond(response, 404, { detail: "Tag unavailable" });
+    tags = tags.filter(tag => tag.id !== body.tagId);
+    transactionTags = transactionTags.filter(id => id !== body.tagId);
+    return respond(response, 200, { deleted: true });
+  }
   if (path === "transaction-tags" && request.method === "POST") {
-    if (body.entryId !== transactionId || !body.tagIds.every(id => tags.some(tag => tag.id === id))) return respond(response, 404, { detail: "Resource unavailable" });
-    transactionTags = body.tagIds;
+    const tagIds = body.tagIds ?? [body.tagId];
+    if (body.entryId !== transactionId || !tagIds.every(id => tags.some(tag => tag.id === id))) return respond(response, 404, { detail: "Resource unavailable" });
+    if (body.tagIds) transactionTags = body.tagIds;
+    else if (body.assigned) transactionTags = [...new Set([...transactionTags, body.tagId])];
+    else transactionTags = transactionTags.filter(id => id !== body.tagId);
     return respond(response, 200, { saved: true });
   }
   if (receivablesEnabled && request.method === "POST" && ["receivable-plan", "receivable-link"].includes(path)) {

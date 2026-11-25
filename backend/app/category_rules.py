@@ -113,7 +113,7 @@ def first_matching_rule(entry: dict, rules: list[dict], eligible_category_ids: s
 
 
 def preview_rule(
-    data: dict, categories: list[dict], assignments: dict[str, str],
+    data: dict, categories: list[dict], assignments: dict[str, str | None],
     rules: list[dict], draft: dict, today: date,
 ) -> dict:
     """Count actual category changes and bind confirmation to the reviewed state."""

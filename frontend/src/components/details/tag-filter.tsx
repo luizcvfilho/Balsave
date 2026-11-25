@@ -1,5 +1,6 @@
 import { useFinancialReports } from "../../data/financial-reports";
 import type { TransactionTag } from "../../lib/finance";
+import { ReportMultiSelect } from "./report-filters";
 
 export function useTagFilter(params: URLSearchParams) {
   const { tags, live } = useFinancialReports();
@@ -16,31 +17,15 @@ export function TagFilter({ tags, selected, update }: {
   if (tags.length === 0) return null;
 
   return (
-    <details className="report-tag-filter">
-      <summary>Filtrar por etiquetas{selected.size > 0 && ` (${selected.size})`}</summary>
-      <fieldset>
-        <legend>Lançamentos com pelo menos uma das etiquetas selecionadas</legend>
-        {tags.map(tag => (
-          <label key={tag.id} className="report-choice report-tag-option">
-            <input
-              type="checkbox"
-              checked={selected.has(tag.id)}
-              onChange={event => {
-                const next = new Set(selected);
-                if (event.target.checked) next.add(tag.id);
-                else next.delete(tag.id);
-                update({ etiquetas: [...next].join(",") });
-              }}
-            />
-            <span>{tag.name}</span>
-          </label>
-        ))}
-        {selected.size > 0 && (
-          <button className="report-link report-action" type="button" onClick={() => update({ etiquetas: undefined })}>
-            Limpar etiquetas
-          </button>
-        )}
-      </fieldset>
-    </details>
+    <ReportMultiSelect
+      label="Filtrar por etiquetas"
+      placeholder="Todas as etiquetas"
+      selectionLabel="Etiquetas"
+      clearLabel="Limpar etiquetas"
+      description="Mostra lançamentos com pelo menos uma das etiquetas selecionadas."
+      options={tags.map(tag => ({ value: tag.id, label: tag.name }))}
+      selected={selected}
+      onChange={values => update({ etiquetas: values.join(",") || undefined })}
+    />
   );
 }

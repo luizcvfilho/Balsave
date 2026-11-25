@@ -1,23 +1,55 @@
 import { expect, test } from "@playwright/test";
 
-test("shows the demo sign-in link only in the home page header", async ({ page }) => {
+test("manages categories and tags within the classification page", async ({ page }) => {
+  await page.goto("/gastos");
+  for (const tab of ["Por categoria", "Ritmo de gastos"]) {
+    const reports = page.getByRole("navigation", { name: "Detalhes de gastos" });
+    await reports.getByRole("link", { name: tab, exact: true }).click();
+    await expect(reports.getByRole("link", { name: tab, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(reports.getByRole("link")).toHaveText(["Por categoria", "Ritmo de gastos"]);
+    await expect(page.getByRole("link", { name: /Gerenciar categorias/ })).toHaveCount(0);
+  }
+  const header = page.getByRole("banner");
+  const classifications = header.getByRole("link", { name: "Classificações", exact: true });
+  await classifications.click();
+  await expect(page).toHaveURL(/\/classificacoes$/);
+  await expect(classifications).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main")).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Classificações");
+  await expect(page.getByRole("searchbox", { name: "Buscar categoria" })).toBeVisible();
+  await page.getByRole("button", { name: "Regras", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Regras pessoais" })).toBeVisible();
+  const catalogs = page.getByRole("navigation", { name: "Catálogos de classificação" });
+  await expect(page.getByRole("main").getByRole("navigation")).toHaveCount(1);
+  await catalogs.getByRole("link", { name: "Etiquetas", exact: true }).click();
+  await expect(page).toHaveURL(/\/classificacoes\?aba=etiquetas$/);
+  await expect(page.getByRole("searchbox", { name: "Buscar etiqueta" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Mostra de cinema/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Classificações");
+  await page.goto("/etiquetas");
+  await expect(page).toHaveURL(/\/classificacoes\?aba=etiquetas$/);
+  await catalogs.getByRole("link", { name: "Categorias e regras", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Buscar categoria" })).toBeVisible();
+});
+
+test("opens demo account access from the profile menu", async ({ page }) => {
   await page.goto("/");
   const header = page.getByRole("banner");
   const signIn = header.getByRole("link", { name: "Entrar", exact: true });
   await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
-  await expect(signIn).toBeVisible();
+  await expect(signIn).toHaveCount(0);
   await expect(page.getByRole("main").getByRole("link", { name: "Entrar", exact: true })).toHaveCount(0);
 
-  await header.getByRole("link", { name: "Conectar bancos" }).click();
+  await header.getByRole("link", { name: "Contas", exact: true }).click();
+  await page.getByRole("navigation", { name: "Detalhes de contas" }).getByRole("link", { name: "Conexões", exact: true }).click();
   await expect(page).toHaveURL(/\/conexoes$/);
-  await expect(signIn).toHaveCount(0);
-  await header.getByRole("link", { name: "Balsave, início" }).click();
+  await header.getByLabel("Minha conta").click();
   await signIn.click();
   await expect(page).toHaveURL(/\/acesso$/);
   await expect(signIn).toHaveCount(0);
   await expect(page.getByText("O login ainda não está habilitado nesta instalação.")).toBeVisible();
   await page.getByRole("link", { name: "Voltar à demonstração", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Painel financeiro", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 });
 
 test("shows shared navigation and updates spending charts independently", async ({ page }) => {
@@ -25,15 +57,18 @@ test("shows shared navigation and updates spending charts independently", async 
   page.on("pageerror", error => pageErrors.push(error));
   await page.goto("/");
   const header = page.getByRole("banner");
-  await expect(header.getByRole("link", { name: "Balsave, início" })).toHaveAttribute("href", "/");
-  await expect(header.getByRole("link", { name: "Conectar bancos" })).toHaveAttribute("href", "/conexoes");
+  await expect(header.getByRole("link", { name: "Balsave, visão geral" })).toHaveAttribute("href", "/");
+  const nav = header.getByRole("navigation", { name: "Navegação principal" });
+  await expect(nav.getByRole("link")).toHaveText(["Visão geral", "Extrato", "Gastos", "Classificações", "Contas"]);
+  await expect(nav.getByRole("link", { name: "Visão geral", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Lançamentos recentes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toHaveCount(0);
 
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
   const pace = page.getByRole("slider", { name: "Dia do mês no gráfico de ritmo de gastos" });
+  await categories.getByText("Todas as categorias", { exact: true }).click();
   await expect(categories.getByText("Sem categoria")).toBeVisible();
-  await categories.getByRole("combobox").selectOption("2026-09");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-09");
   await expect(categories.getByText("Viagem")).toBeVisible();
   await expect(categories.getByText("Sem categoria")).toHaveCount(0);
   await expect(pace).toHaveAttribute("aria-valuetext", /Dia 14 de novembro/);
@@ -47,10 +82,10 @@ test("keeps category colors stable and communicates spending and transaction dir
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
   const categoryBar = (name: string) => categories.getByRole("listitem")
     .filter({ has: page.getByText(name, { exact: true }) }).locator(".MuiLinearProgress-bar");
-  await expect(categoryBar("Moradia")).toHaveCSS("background-color", "rgb(171, 89, 66)");
-  await expect(categoryBar("Alimentação")).toHaveCSS("background-color", "rgb(53, 116, 86)");
-  await categories.getByRole("combobox").selectOption("2026-09");
-  await expect(categoryBar("Moradia")).toHaveCSS("background-color", "rgb(171, 89, 66)");
+  await expect(categoryBar("Moradia")).toHaveCSS("background-color", "rgb(117, 165, 138)");
+  await expect(categoryBar("Alimentação")).toHaveCSS("background-color", "rgb(117, 165, 138)");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-09");
+  await expect(categoryBar("Moradia")).toHaveCSS("background-color", "rgb(117, 165, 138)");
 
   const chart = page.getByRole("region", { name: "Ritmo de gastos" });
   await expect(chart.locator("path.chart-above")).toHaveCSS("stroke", "rgb(166, 79, 56)");
@@ -61,11 +96,12 @@ test("keeps category colors stable and communicates spending and transaction dir
   await slider.press("ArrowRight");
   await expect(chart.getByText(/4,53 acima da média/)).toBeVisible();
 
-  const transactions = page.getByRole("region", { name: "Lançamentos recentes" });
-  await expect(transactions.getByText(/\+R\$\s*6\.850,00/)).toHaveCSS("color", "rgb(40, 113, 79)");
-  await expect(transactions.getByText(/\+R\$\s*500,00/)).toHaveCSS("color", "rgb(40, 113, 79)");
-  await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
-  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Extrato" }).click();
+  const transactions = page.getByRole("table", { name: "Lançamentos filtrados" });
+  await expect(transactions.getByText(/\+R\$\s*6\.850,00/)).toHaveCSS("color", "rgb(36, 101, 70)");
+  await expect(transactions.getByText(/\+R\$\s*500,00/)).toHaveCSS("color", "rgb(36, 101, 70)");
+  await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
+  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
 });
 
 test.describe("mobile layout", () => {
@@ -74,12 +110,12 @@ test.describe("mobile layout", () => {
   test("stacks the cards and allows touching the line chart", async ({ page }) => {
     await page.goto("/");
     const header = page.getByRole("banner");
-    const logo = await header.getByRole("link", { name: "Balsave, início" }).boundingBox();
-    const signIn = header.getByRole("link", { name: "Entrar", exact: true });
-    await expect(signIn).toBeVisible();
-    const signInBox = await signIn.boundingBox();
-    expect(signInBox?.x).toBeGreaterThan((logo?.x ?? 0) + (logo?.width ?? 0));
-    expect(signInBox?.height).toBeGreaterThanOrEqual(44);
+    const logo = await header.getByRole("link", { name: "Balsave, visão geral" }).boundingBox();
+    const profile = await header.getByLabel("Minha conta").boundingBox();
+    expect(profile?.x).toBeGreaterThan((logo?.x ?? 0) + (logo?.width ?? 0));
+    expect(profile?.height).toBeGreaterThanOrEqual(44);
+    const nav = page.getByRole("navigation", { name: "Navegação principal" });
+    await expect(nav.getByRole("link")).toHaveText(["Início", "Extrato", "Gastos", "Classificações", "Contas"]);
     const accounts = page.getByRole("region", { name: "Saldo em contas", exact: true });
     const cards = page.getByRole("region", { name: "Limite usado nos cartões" });
     await expect(accounts).toBeVisible();
@@ -96,4 +132,19 @@ test.describe("mobile layout", () => {
     await expect(page.getByRole("slider", { name: "Dia do mês no gráfico de ritmo de gastos" }))
       .toHaveAttribute("aria-valuetext", /Dia 1 de novembro/);
   });
+});
+
+test("follows the system theme and keeps a manual choice across pages and reloads", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  const toggle = page.getByRole("button", { name: "Tema escuro" });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(16, 18, 17)");
+  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "Extrato" }).click();
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await toggle.click();
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });

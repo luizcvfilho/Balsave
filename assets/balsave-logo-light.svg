@@ -1,20 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 180" role="img" aria-labelledby="title desc">
-  <title id="title">Balsave — logo principal</title>
-  <desc id="desc">Símbolo circular com três colunas ascendentes, formas de equilíbrio verdes e terracota, seguido de Balsave e sua assinatura.</desc>
-  <g transform="translate(18 14)">
-    <!-- Protection and balance arc -->
-    <path d="M14 87 A67 67 0 0 1 148 87 C142 47 118 18 81 18 C44 18 20 47 14 87Z" fill="#0D3B2E"/>
-    <path d="M28 88 A53 53 0 0 1 134 88Z" fill="#F7F4EE"/>
-    <!-- Financial growth -->
-    <path d="M47 91 V79 Q47 72 54 72 H64 Q71 72 71 79 V91Z" fill="#2E6B57"/>
-    <path d="M76 91 V62 Q76 55 83 55 H94 Q101 55 101 62 V91Z" fill="#2E6B57"/>
-    <path d="M106 91 V45 Q106 38 113 38 H124 Q131 38 131 45 V91Z" fill="#2E6B57"/>
-    <!-- Stable base and horizon -->
-    <path d="M18 103 Q81 96 144 103 L138 116 Q82 123 27 114Z" fill="#2E6B57"/>
-    <path d="M32 124 Q82 134 135 121 Q108 156 79 156 Q51 156 32 124Z" fill="#C66A4A"/>
-    <path d="M29 118 Q82 132 140 115" stroke="#F7F4EE" stroke-width="6" fill="none" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186 48" role="img" aria-labelledby="title">
+  <title id="title">Balsave</title>
+  <rect x="1" y="1" width="46" height="46" rx="13" fill="#192720"/>
+  <path d="M13 34.5V13.5h11a6 6 0 0 1 0 12h-5.5m0 9h11a6 6 0 0 0 0-12h-2" fill="none" stroke="#FFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m32.5 15.5 4-4m-4 0h4v4" fill="none" stroke="#A6DBB9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="none" stroke="#19201D" stroke-width="3.15" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M63 35V13h9a5.5 5.5 0 0 1 0 11h-9m9 0h1a5.5 5.5 0 0 1 0 11H63M98 20v15m0-7.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0M105 13v22m18-13c-1.5-1.5-3.4-2-5.5-2-3.1 0-5.3 1.6-5.3 3.8 0 5.2 11.3 2.3 11.3 7.6 0 2.3-2.4 4.1-5.7 4.1-2.5 0-4.7-.8-6.3-2.5m32-13v15m0-7.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0m5-7.5 7 15 7-15m4.5 7.3h14c0-4.1-2.9-7.3-6.8-7.3-4.1 0-7.2 3.3-7.2 7.7 0 4.7 3.3 7.8 7.7 7.8 2.4 0 4.2-.7 5.9-2"/>
   </g>
-  <path d="M193 43 V143" stroke="#BFC8BF" stroke-width="1.5"/>
-  <text x="218" y="104" font-family="Inter, Arial, sans-serif" font-size="65" font-weight="650" letter-spacing="-2.6" fill="#0D3B2E">Balsave</text>
-  <text x="222" y="138" font-family="Inter, Arial, sans-serif" font-size="20" letter-spacing="0.1" fill="#3A3A3A">controle, patrimônio e evolução</text>
 </svg>

@@ -43,11 +43,13 @@ function buildReports(data: FinancialData, live: boolean) {
     ...plannedInstallments.map(plan => [plan.categoryKey ?? categoryKeyForLabel(plan.category), plan.category] as const),
   ]).entries()].map(([value, label]) => ({ value, label }))
     .sort((first, second) => first.label.localeCompare(second.label, "pt-BR"));
-  const sources = new Map(accounts.map(account => [account.id, `${account.bank} · ${account.name}`]));
+  const sources = new Map<string, { bank: string; detail: string; label: string; cardEnding?: string }>([...accounts, ...investments].map(({ id, bank, name }) => [id, {
+    bank, detail: name, label: `${bank} · ${name}`,
+  }]));
   for (const card of cards) {
-    sources.set(card.id, cardLabel(card));
+    const detail = card.lastFour ? `Cartão •••• ${card.lastFour}` : card.name || "Cartão";
+    sources.set(card.id, { bank: card.bank, detail, label: cardLabel(card), cardEnding: card.lastFour });
   }
-  for (const investment of investments) sources.set(investment.id, `${investment.bank} · ${investment.name}`);
 
   function paceChartPoints(month: string, monthlySpending = spending) {
     const end = month === currentMonth ? asOf : `${month}-${daysInMonth(month)}`;
@@ -63,10 +65,11 @@ function buildReports(data: FinancialData, live: boolean) {
     return previousMonths(month, 3).every(previous => covered.includes(previous));
   }
 
-  function balanceHistory(bank?: string) {
+  function balanceHistory(banks?: ReadonlySet<string>) {
+    const includesBank = ({ bank }: { bank: string }) => !banks?.size || banks.has(bank);
     const snapshots = balanceSnapshots.filter(({ month }) => month < currentMonth).map(({ month, accounts }) => ({
       month,
-      accounts: accounts.filter(account => !bank || account.bank === bank),
+      accounts: accounts.filter(includesBank),
     })).filter(snapshot => snapshot.accounts.length > 0);
     const latestClosed = snapshots.at(-1);
     // Use the same accounts for the entire series so changes reflect movements within a fixed set.
@@ -77,7 +80,7 @@ function buildReports(data: FinancialData, live: boolean) {
         ? [{ month, cents: summarizeBalances(included).totalCents + bankTransfersAfterMonth(reportedTransactions, comparable, month) }]
         : [];
     });
-    const available = positions.filter(account => !bank || account.bank === bank).length;
+    const available = positions.filter(includesBank).length;
     const partial = comparable.size < available;
     const coverage = partial ? ` O gráfico cobre ${comparable.size} de ${available} contas disponíveis.` : "";
     const investmentCoverage = investments.length ? " Investimentos estimados por fluxo de caixa, com a valorização histórica pendente." : "";
@@ -101,13 +104,17 @@ function buildReports(data: FinancialData, live: boolean) {
   }
 
   function transactionSource({ accountId, cardId, investmentId }: Transaction) {
-    return sources.get(accountId ?? cardId ?? investmentId ?? "");
+    return sources.get(accountId ?? cardId ?? investmentId ?? "")?.label;
+  }
+
+  function transactionInstitution({ accountId, cardId, investmentId }: Transaction) {
+    return (cardId && sources.get(cardId)) || sources.get(accountId ?? investmentId ?? "");
   }
 
   return {
     ...data, tags, investments, positions, receivableGroups, receivables, receivableCredits, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
     plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
-    expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
+    expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource, transactionInstitution,
   };
 }
 

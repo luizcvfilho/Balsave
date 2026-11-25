@@ -46,9 +46,25 @@ export async function updateCategory(viewKey: string | null, payload: { category
   return { ok: true, category: data.category };
 }
 
-export async function saveTransactionCategory(viewKey: string | null, payload: { entryId: string; categoryId: string | null }): Promise<ActionResult> {
+export async function deleteCategory(viewKey: string | null, payload: { categoryId: string }): Promise<ActionResult> {
+  if (!payload || typeof payload.categoryId !== "string" || !uuid.test(payload.categoryId)) return invalidInput;
+  const response = await financialRequest("category-delete", viewKey, payload);
+  if (response?.status === 409) return { ok: false, message: "As categorias padrão não podem ser excluídas." };
+  if (response?.status === 503) return { ok: false, message: "Não foi possível concluir a exclusão. Confira se suas conexões estão disponíveis e tente novamente." };
+  if (!response?.ok) return failure(response);
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function saveTransactionCategory(viewKey: string | null, payload: {
+  entryId: string;
+  categoryId: string | null;
+  unclassified?: boolean;
+}): Promise<ActionResult> {
   if (!payload || typeof payload.entryId !== "string" || !entryId.test(payload.entryId)
-    || (payload.categoryId !== null && (typeof payload.categoryId !== "string" || !uuid.test(payload.categoryId)))) return invalidInput;
+    || (payload.categoryId !== null && (typeof payload.categoryId !== "string" || !uuid.test(payload.categoryId)))
+    || (payload.unclassified !== undefined && typeof payload.unclassified !== "boolean")
+    || (payload.unclassified && payload.categoryId !== null)) return invalidInput;
   const response = await financialRequest("transaction-category", viewKey, payload);
   if (response?.status === 409) return { ok: false, message: "Este lançamento mudou. Atualize a página antes de alterar a categoria." };
   if (!response?.ok) return failure(response);
