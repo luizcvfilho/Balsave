@@ -46,17 +46,28 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
   await expect(editTags).toBeFocused();
   expect(await editTags.getByText("Escritório", { exact: true }).getAttribute("data-color")).toBe(workColor);
 
-  await page.getByText("Filtrar por etiquetas", { exact: true }).click();
+  const tagFilter = page.getByRole("combobox", { name: "Filtrar por etiquetas" });
+  const tagOptions = page.getByRole("listbox", { name: "Etiquetas" });
+  await tagFilter.click();
   const purchase = ledger.getByRole("link", { name: "Loja de equipamentos", exact: true });
-  await page.getByRole("checkbox", { name: "Outra etiqueta" }).click();
+  await tagOptions.getByRole("option", { name: "Outra etiqueta" }).click();
+  await expect(tagOptions.getByRole("option", { name: "Outra etiqueta" })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(tagFilter).toBeFocused();
   await expect(purchase).toHaveCount(0);
-  await page.getByRole("button", { name: "Limpar etiquetas" }).click();
+  await tagFilter.click();
+  await tagOptions.getByRole("option", { name: "Limpar etiquetas" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page).not.toHaveURL(/etiquetas=/);
   await expect(purchase).toHaveCount(1);
+  await tagFilter.click();
   for (const name of ["Escritório", "Viagem"]) {
-    const filter = page.getByRole("checkbox", { name });
+    const filter = tagOptions.getByRole("option", { name, exact: true });
     await filter.click();
-    await expect(filter).toBeChecked();
+    await expect(filter).toHaveAttribute("aria-selected", "true");
   }
+  await page.keyboard.press("Escape");
+  await expect(tagFilter).toHaveText("Etiquetas (2)");
   await expect(page).toHaveURL(/etiquetas=/);
   await expect(purchase).toHaveCount(1);
   await expect(ledger.locator("dl").getByText(/^R\$\s125,00$/)).toBeVisible();
@@ -68,9 +79,11 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
   await expect(purchase).toHaveCount(1);
 
   await page.getByRole("link", { name: "Voltar ao painel" }).click();
+  await expect(tagFilter).toHaveText("Etiquetas (2)");
   await expect(page.getByRole("region", { name: "Gastos por categoria" }).getByText(/^R\$\s125,00$/)).toBeVisible();
   await page.getByRole("link", { name: "Ver gastos", exact: true }).click();
   await expect(page).toHaveURL(/etiquetas=/);
+  await expect(tagFilter).toHaveText("Etiquetas (2)");
   await expect(page.getByRole("region", { name: "Compras no período" }).locator("dl").getByText(/^R\$\s125,00$/)).toBeVisible();
 
   await page.goto("/lancamentos");

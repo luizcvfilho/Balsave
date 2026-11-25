@@ -3,20 +3,13 @@ import { transactionCategory, transactionCategoryKey, transactionKindLabels } fr
 
 export function useCategoryOptions(ledger = false) {
   const { expenseCategories, reportedTransactions } = useFinancialReports();
-  const categories = ledger
+  return ledger
     ? [...new Map(reportedTransactions.map(transaction => [transactionCategoryKey(transaction), transactionCategory(transaction)])).entries()]
       .map(([value, label]) => ({ value, label })).sort((first, second) => first.label.localeCompare(second.label, "pt-BR"))
     : expenseCategories;
-  return [
-    { value: "", label: "Todas as categorias" },
-    ...categories,
-  ];
 }
 
-export const kindOptions = [
-  { value: "", label: "Todos os tipos" },
-  ...Object.entries(transactionKindLabels).map(([value, label]) => ({ value, label })),
-];
+export const kindOptions = Object.entries(transactionKindLabels).map(([value, label]) => ({ value, label }));
 
 export const orderOptions = [
   { value: "recent", label: "Mais recentes" },

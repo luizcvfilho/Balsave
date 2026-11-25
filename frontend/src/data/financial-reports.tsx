@@ -65,10 +65,11 @@ function buildReports(data: FinancialData, live: boolean) {
     return previousMonths(month, 3).every(previous => covered.includes(previous));
   }
 
-  function balanceHistory(bank?: string) {
+  function balanceHistory(banks?: ReadonlySet<string>) {
+    const includesBank = ({ bank }: { bank: string }) => !banks?.size || banks.has(bank);
     const snapshots = balanceSnapshots.filter(({ month }) => month < currentMonth).map(({ month, accounts }) => ({
       month,
-      accounts: accounts.filter(account => !bank || account.bank === bank),
+      accounts: accounts.filter(includesBank),
     })).filter(snapshot => snapshot.accounts.length > 0);
     const latestClosed = snapshots.at(-1);
     // Use the same accounts for the entire series so changes reflect movements within a fixed set.
@@ -79,7 +80,7 @@ function buildReports(data: FinancialData, live: boolean) {
         ? [{ month, cents: summarizeBalances(included).totalCents + bankTransfersAfterMonth(reportedTransactions, comparable, month) }]
         : [];
     });
-    const available = positions.filter(account => !bank || account.bank === bank).length;
+    const available = positions.filter(includesBank).length;
     const partial = comparable.size < available;
     const coverage = partial ? ` O gráfico cobre ${comparable.size} de ${available} contas disponíveis.` : "";
     const investmentCoverage = investments.length ? " Investimentos estimados por fluxo de caixa, com a valorização histórica pendente." : "";

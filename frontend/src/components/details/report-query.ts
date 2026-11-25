@@ -1,26 +1,23 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { reportHref } from "../../lib/report-links";
+import { reportHref, type ReportQueryValues, setReportQueryValues } from "../../lib/report-links";
 
 export function useReportQuery() {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  function withQuery(search: string, values: Record<string, string | undefined>) {
+  function withQuery(search: string, values: ReportQueryValues) {
     const next = new URLSearchParams(search);
-    for (const [key, value] of Object.entries(values)) {
-      if (value) next.set(key, value);
-      else next.delete(key);
-    }
+    setReportQueryValues(next, values);
     return reportHref(pathname, next);
   }
 
-  function href(values: Record<string, string | undefined>) {
+  function href(values: ReportQueryValues) {
     return withQuery(params.toString(), values);
   }
 
-  function update(values: Record<string, string | undefined>) {
+  function update(values: ReportQueryValues) {
     window.history.replaceState(null, "", withQuery(window.location.search, values));
   }
 

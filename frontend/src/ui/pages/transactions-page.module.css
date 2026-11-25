@@ -4,12 +4,6 @@
   min-width: 0;
 }
 
-.period { align-items: end; }
-
-.period > :global(.report-field) {
-  flex-basis: 180px;
-}
-
 .primaryFilters {
   display: grid;
   grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, clamp(140px, 16vw, 200px)));

@@ -6,7 +6,7 @@ import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
 import { SpendingCategoryList } from "../../components/dashboard/spending-categories";
-import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
+import { matchesSearch, PeriodFields, ReportMultiSelect, ReportSelect, SearchField, usePeriod } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
@@ -16,7 +16,12 @@ import { orderedTransactions, TransactionTable } from "../../components/details/
 import { useFinancialReports } from "../../data/financial-reports";
 import { categoryKeyForLabel, matchesTransactionTags, spendingByMonth, transactionCategory, transactionCategoryKey } from "../../lib/finance";
 import { formatDate, formatMoney, formatMonthName, formatNumericDate } from "../../lib/format";
-import { optionValue, reportHref } from "../../lib/report-links";
+import { optionValue, optionValues, reportHref } from "../../lib/report-links";
+
+const purchaseTypeOptions = [
+  { value: "parcelada", label: "Parceladas" },
+  { value: "sem-parcelas", label: "Sem parcelas identificadas" },
+];
 
 export function SpendingPage() {
   const { params, href, update } = useReportQuery();
@@ -29,13 +34,17 @@ export function SpendingPage() {
     <ReportLayout title={rhythm ? "Ritmo de gastos" : "Gastos por categoria"}
       description="Entenda como as despesas se distribuem ao longo do mês."
       dashboardMonth={dashboardMonth} dashboardTags={tagFilter.query}
-      controls={!rhythm && <div className="report-filters"><PeriodFields period={period} update={update} compact /></div>}>
+      controls={(!rhythm || tagFilter.tags.length > 0) && (
+        <div className="report-filters report-heading-filters">
+          {!rhythm && <PeriodFields period={period} update={update} compact />}
+          <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
+        </div>
+      )}>
       <ReportNavigation label="Detalhes de gastos" options={[
         { label: "Por categoria", href: href({ aba: undefined }), active: !rhythm },
         { label: "Ritmo de gastos", href: href({ aba: "ritmo" }), active: rhythm },
         { label: "Categorias e regras", href: reportHref("/categorias", { painelMes: dashboardMonth ?? undefined, etiquetas: tagFilter.query }), active: false },
       ]} />
-      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
       {rhythm ? <SpendingRhythm tagFilter={tagFilter} /> : <CategoryExpenses period={period} tagFilter={tagFilter} />}
     </ReportLayout>
   );
@@ -48,17 +57,18 @@ function CategoryExpenses({ period, tagFilter }: { period: ReturnType<typeof use
   const hideTracked = params.get("acompanhamento") === "ocultar";
   const tracked = new Set(receivableGroups.map(group => group.expenseId));
   const expenseCategoryOptions = useCategoryOptions();
-  const category = optionValue(params.get("categoria"), expenseCategoryOptions.map(option => option.value));
-  const installmentsOnly = params.get("compra") === "parcelada";
+  const selectedCategories = optionValues(params, "categoria", expenseCategoryOptions);
+  const purchaseTypes = optionValues(params, "compra", purchaseTypeOptions);
+  const installmentsOnly = purchaseTypes.size === 1 && purchaseTypes.has("parcelada");
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
   const [search, setSearch] = useState("");
   const matching = expenses.filter(({ expense, refunds, netCents }) => (gross || netCents > 0)
     && (!hideTracked || (!tracked.has(expense.id) && !expense.expectsRefund && refunds.length === 0))
     && period.includes(expense.date)
     && matchesTransactionTags(expense, tagFilter.selected)
-    && (!installmentsOnly || expense.installment)
+    && (!purchaseTypes.size || purchaseTypes.has(expense.installment ? "parcelada" : "sem-parcelas"))
     && matchesSearch(search, expense.name));
-  const results = matching.filter(({ expense }) => !category || transactionCategoryKey(expense) === category);
+  const results = matching.filter(({ expense }) => !selectedCategories.size || selectedCategories.has(transactionCategoryKey(expense)));
   const distribution = new Map<string, { key: string; name: string; cents: number }>();
   let distributionCents = 0;
   for (const { expense, netCents } of matching) {
@@ -68,14 +78,19 @@ function CategoryExpenses({ period, tagFilter }: { period: ReturnType<typeof use
     distributionCents += cents;
   }
   const categories = [...distribution.values()].sort((first, second) => second.cents - first.cents);
-  const activeCategory = expenseCategoryOptions.find(option => option.value === category)?.label;
+  const activeCategory = selectedCategories.size === 1
+    ? expenseCategoryOptions.find(option => selectedCategories.has(option.value))?.label : undefined;
   const rows = orderedTransactions(results.map(({ expense, receivedCents, netCents }) => ({
     transaction: expense, receivedCents: gross ? 0 : receivedCents, netCents: gross ? expense.amountCents : netCents,
   })), order);
   const total = results.reduce((sum, row) => sum + (gross ? row.expense.amountCents : row.netCents), 0);
   const dashboardMonth = params.get("painelMes") ?? undefined;
-  const plansInPeriod = tagFilter.selected.size ? [] : plannedInstallments.filter(plan => period.includes(plan.date));
-  const plans = plansInPeriod.filter(plan => (!category || (plan.categoryKey ?? categoryKeyForLabel(plan.category)) === category) && matchesSearch(search, plan.name));
+  const plansInPeriod = tagFilter.selected.size || (purchaseTypes.size && !purchaseTypes.has("parcelada"))
+    ? [] : plannedInstallments.filter(plan => period.includes(plan.date));
+  const plans = plansInPeriod.filter(plan =>
+    (!selectedCategories.size || selectedCategories.has(plan.categoryKey ?? categoryKeyForLabel(plan.category)))
+    && matchesSearch(search, plan.name),
+  );
   const plannedCents = plans.reduce((sum, plan) => sum + plan.amountCents, 0);
   const transactionHref = (id: string) => reportHref("/lancamentos", {
     painelMes: dashboardMonth, etiquetas: tagFilter.query, lancamento: id,
@@ -86,27 +101,27 @@ function CategoryExpenses({ period, tagFilter }: { period: ReturnType<typeof use
       <section className="report-panel-stack" aria-label="Compras no período">
         <div className="report-columns">
           <SectionCard id="distribuicao-gastos" title="Distribuição dos gastos" description="Selecione uma categoria para filtrar as compras.">
-            {categories.length > 0 ? <SpendingCategoryList categories={categories} totalCents={distributionCents} active={category}
+            {categories.length > 0 ? <SpendingCategoryList categories={categories} totalCents={distributionCents} active={selectedCategories}
               getHref={key => href({ categoria: key })} /> : <p className="report-muted">Nenhum gasto registrado neste período.</p>}
           </SectionCard>
-          <SectionCard id="resumo-gastos" title={category ? activeCategory ?? "Gastos no período" : "Gastos no período"} highlighted>
+          <SectionCard id="resumo-gastos" title={activeCategory ?? "Gastos no período"} highlighted>
             <div className="spending-report-metrics">
               <ReportMetrics items={[
                 { label: gross ? "Gasto bruto" : "Gasto líquido", value: formatMoney(total) },
                 { label: "Compras", value: String(rows.length) },
               ]} />
             </div>
-            <Link className="report-link report-action" href={category ? href({ categoria: undefined }) : reportHref("/categorias", { painelMes: dashboardMonth, etiquetas: tagFilter.query })}>
-              {category ? "Limpar categoria" : "Gerenciar categorias"} →
+            <Link className="report-link report-action" href={selectedCategories.size ? href({ categoria: undefined }) : reportHref("/categorias", { painelMes: dashboardMonth, etiquetas: tagFilter.query })}>
+              {selectedCategories.size ? "Limpar categorias" : "Gerenciar categorias"} →
             </Link>
           </SectionCard>
         </div>
-        <SectionCard id="gastos-filtrados" title={category && activeCategory ? `Compras em ${activeCategory}` : "Compras registradas"}>
+        <SectionCard id="gastos-filtrados" title={activeCategory ? `Compras em ${activeCategory}` : "Compras registradas"}>
           <div className="report-filters">
-            <ReportSelect label="Categoria" value={category} options={expenseCategoryOptions} onChange={value => update({ categoria: value })} />
-            <ReportSelect label="Tipo de compra" value={installmentsOnly ? "parcelada" : ""} options={[
-              { value: "", label: "Todas as compras" }, { value: "parcelada", label: "Parceladas" },
-            ]} onChange={value => update({ compra: value })} />
+            <ReportMultiSelect label="Categoria" placeholder="Todas as categorias" selectionLabel="Categorias"
+              selected={selectedCategories} options={expenseCategoryOptions} onChange={values => update({ categoria: values })} labeled />
+            <ReportMultiSelect label="Tipo de compra" placeholder="Todas as compras" selectionLabel="Tipos de compra"
+              options={purchaseTypeOptions} selected={purchaseTypes} onChange={values => update({ compra: values })} labeled />
             <ReportSelect label="Valor" value={gross ? "bruto" : "liquido"} options={[
               { value: "liquido", label: "Líquido" }, { value: "bruto", label: "Bruto" },
             ]} onChange={value => update({ valor: value === "bruto" ? value : undefined })} />

@@ -89,18 +89,20 @@ export function DashboardPage() {
   return (
     <main className="balsave-shell dashboard-layout">
       <PageHeading title="Visão geral" description="Acompanhe suas contas, seus gastos e a evolução do saldo."
-        controls={<ReportSelect label="Período" variant="period" value={month} options={planningMonthOptions}
-          onChange={value => {
-            setSelectedBalanceMonth(undefined);
-            update({ mes: value === currentMonth ? undefined : value });
-          }} />} />
+        controls={<div className="report-filters report-heading-filters">
+          <ReportSelect label="Período" variant="period" value={month} options={planningMonthOptions}
+            onChange={value => {
+              setSelectedBalanceMonth(undefined);
+              update({ mes: value === currentMonth ? undefined : value });
+            }} />
+          <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
+        </div>} />
 
       {failedConnections > 0 && (
         <p className="report-muted" role="status">Algumas conexões estão indisponíveis. Os totais podem estar incompletos.</p>
       )}
       {!!failedInvestments && <p className="report-muted" role="status">Alguns investimentos estão indisponíveis. O saldo consolidado pode estar incompleto.</p>}
 
-      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
       <div className="dashboard-overview">
         <SectionCard
           id="evolucao"

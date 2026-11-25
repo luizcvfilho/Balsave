@@ -11,7 +11,7 @@ import { CategoryEditor } from "../../components/details/category-editor";
 import { DemoRefundDetail, DemoRefunds } from "../../components/details/demo-refunds";
 import { ReceivableDetail, ReceivablesList } from "../../components/details/receivable-view";
 import { ReceiptEditor, useReceiptAnnotations } from "../../components/details/receipt-annotations";
-import { matchesSearch, PeriodFields, usePeriod, ReportSelect, SearchField } from "../../components/details/report-filters";
+import { matchesSearch, PeriodFields, ReportMultiSelect, ReportSelect, SearchField, usePeriod } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
@@ -24,7 +24,7 @@ import { cardLabel } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
 import { bankBalanceImpact, isIncoming, matchesTransactionTags, type Transaction, transactionCategory, transactionCategoryKey, transactionKindLabels, transactionTotals } from "../../lib/finance";
 import { formatDate, formatMoney, formatNumericDate, formatSignedMoney } from "../../lib/format";
-import { optionValue, reportHref } from "../../lib/report-links";
+import { optionValue, optionValues, reportHref } from "../../lib/report-links";
 import styles from "./transactions-page.module.css";
 
 export function TransactionsPage() {
@@ -70,8 +70,9 @@ export function TransactionsPage() {
     <ReportLayout title="Lançamentos" description="Consulte entradas, saídas e classificações."
       dashboardMonth={dashboardMonth} dashboardTags={tagFilter.query}
       controls={!refunds && !receivables && (
-        <div className={`report-filters ${styles.period}`}>
+        <div className="report-filters report-heading-filters">
           <PeriodFields period={period} update={update} compact />
+          <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
         </div>
       )}>
       <ReportNavigation label="Detalhes do extrato" options={[
@@ -94,14 +95,16 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
   const [editingId, setEditingId] = useState<string>();
   const annotations = useReceiptAnnotations(!live);
   const ledgerCategoryOptions = useCategoryOptions(true);
-  const types = live ? kindOptions : kindOptions.filter(option => option.value !== "credit");
-  const type = optionValue(params.get("tipo"), types.map(option => option.value));
-  const category = optionValue(params.get("categoria"), ledgerCategoryOptions.map(option => option.value));
+  const typeOptions = live ? kindOptions : kindOptions.filter(option => option.value !== "credit");
+  const types = optionValues(params, "tipo", typeOptions);
+  const categories = optionValues(params, "categoria", ledgerCategoryOptions);
   const order = optionValue(params.get("ordem"), orderOptions.map(option => option.value), "recent");
-  const banks = [...new Set([...accounts, ...cards, ...investments].map(source => source.bank))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  const bank = optionValue(params.get("banco"), banks);
-  const availableCards = cards.filter(card => !bank || card.bank === bank);
-  const cardId = optionValue(params.get("cartao"), availableCards.map(card => card.id));
+  const bankOptions = [...new Set([...accounts, ...cards, ...investments].map(source => source.bank))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR")).map(bank => ({ value: bank, label: bank }));
+  const banks = optionValues(params, "banco", bankOptions);
+  const cardOptions = cards.filter(card => !banks.size || banks.has(card.bank))
+    .map(card => ({ value: card.id, label: cardLabel(card) }));
+  const cardIds = optionValues(params, "cartao", cardOptions);
   const tagNames = new Map(tagFilter.tags.map(tag => [tag.id, tag.name]));
   const editing = editingId ? reportedTransactions.find(transaction => transaction.id === editingId) : undefined;
 
@@ -140,14 +143,14 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
       receivable?.surplusCents ? `Excedente: ${formatMoney(receivable.surplusCents)}` : undefined,
     ];
     const tags = [...new Set([...(transaction.tags ?? []), ...(annotation?.tags ?? [])])];
-    const matchesType = !type || (type === "refund" && appliedCents > 0)
-      || (transaction.kind === type && (!appliedCents || appliedCents < transaction.amountCents));
+    const matchesType = !types.size || (types.has("refund") && appliedCents > 0)
+      || (types.has(transaction.kind) && (!appliedCents || appliedCents < transaction.amountCents));
     if (!period.includes(transaction.date)
       || !matchesTransactionTags(transaction, tagFilter.selected)
       || !matchesType
-      || (category && transactionCategoryKey(transaction) !== category)
-      || (bank && origin?.bank !== bank)
-      || (cardId && transaction.cardId !== cardId)
+      || (categories.size > 0 && !categories.has(transactionCategoryKey(transaction)))
+      || (banks.size > 0 && (!origin || !banks.has(origin.bank)))
+      || (cardIds.size > 0 && (!transaction.cardId || !cardIds.has(transaction.cardId)))
       || !matchesSearch(search, transaction.name, transactionCategory(transaction), origin?.label, ...labels, ...tags, ...transactionTagNames(transaction))) return [];
     return [{ transaction, annotation: labels.filter(Boolean).join(" · "), tags }];
   });
@@ -158,16 +161,16 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
     <div className={styles.ledger}>
       <div className={`report-filters ${styles.primaryFilters}`}>
         <SearchField value={search} onChange={setSearch} compact />
-        <ReportSelect label="Tipo" variant="compact" value={type} options={types} onChange={value => update({ tipo: value })} />
-        <ReportSelect label="Banco" variant="compact" value={bank}
-          options={[{ value: "", label: "Todos os bancos" }, ...banks.map(value => ({ value, label: value }))]}
-          onChange={value => update({ banco: value, cartao: cards.some(card => card.id === cardId && (!value || card.bank === value)) ? cardId : undefined })} />
-        <ReportSelect label="Cartão" variant="compact" value={cardId} disabled={!availableCards.length}
-          options={[{ value: "", label: availableCards.length ? "Todos os cartões" : "Sem cartões" },
-            ...availableCards.map(card => ({ value: card.id, label: cardLabel(card) }))]}
-          onChange={value => update({ cartao: value })} />
+        <ReportMultiSelect label="Tipo" placeholder="Todos os tipos" selectionLabel="Tipos"
+          selected={types} options={typeOptions} onChange={values => update({ tipo: values })} />
+        <ReportMultiSelect label="Banco" placeholder="Todos os bancos" selectionLabel="Bancos"
+          selected={banks} options={bankOptions} onChange={values => update({
+            banco: values,
+            cartao: cards.filter(card => cardIds.has(card.id) && (!values.length || values.includes(card.bank))).map(card => card.id),
+          })} />
+        <ReportMultiSelect label="Cartão" placeholder={cardOptions.length ? "Todos os cartões" : "Sem cartões"}
+          selectionLabel="Cartões" selected={cardIds} options={cardOptions} onChange={values => update({ cartao: values })} />
       </div>
-      <TagFilter tags={tagFilter.tags} selected={tagFilter.selected} update={update} />
       <section id="historico-lancamentos" aria-labelledby="historico-lancamentos-title">
         <ReportMetrics items={[
           { label: "Entradas", value: formatMoney(totals.incomingCents) },
@@ -179,10 +182,11 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
             <h2 id="historico-lancamentos-title">Histórico de lançamentos</h2>
           </header>
           <p className="sr-only" role="status">{rows.length} {rows.length === 1 ? "lançamento" : "lançamentos"}</p>
-          <details className={styles.secondaryFilters} open={Boolean(category || order !== "recent") || undefined}>
+          <details className={styles.secondaryFilters} open={Boolean(categories.size || order !== "recent") || undefined}>
             <summary>Mais filtros</summary>
             <div className="report-filters">
-              <ReportSelect label="Categoria" value={category} options={ledgerCategoryOptions} onChange={value => update({ categoria: value })} />
+              <ReportMultiSelect label="Categoria" placeholder="Todas as categorias" selectionLabel="Categorias"
+                selected={categories} options={ledgerCategoryOptions} onChange={values => update({ categoria: values })} labeled />
               <ReportSelect label="Ordenar por" value={order} options={orderOptions} onChange={value => update({ ordem: value })} />
             </div>
           </details>

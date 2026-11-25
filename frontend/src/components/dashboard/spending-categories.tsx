@@ -11,7 +11,7 @@ export function SpendingCategoryList({ categories, totalCents, getHref, active }
   categories: Category[];
   totalCents: number;
   getHref: (key: string) => string;
-  active?: string;
+  active?: ReadonlySet<string>;
 }) {
   return (
     // biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden.
@@ -20,7 +20,7 @@ export function SpendingCategoryList({ categories, totalCents, getHref, active }
         const share = totalCents > 0 ? cents / totalCents : 0;
         return (
           <li key={key}>
-            <Link href={getHref(key)} className="spending-category-link" aria-current={active === key ? "true" : undefined}>
+            <Link href={getHref(key)} className="spending-category-link" aria-current={active?.has(key) ? "true" : undefined}>
               <span className="spending-category-tile"><CategoryIcon categoryKey={key} /></span>
               <span className="spending-category-breakdown">
                 <span>{name}</span>

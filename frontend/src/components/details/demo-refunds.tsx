@@ -2,10 +2,10 @@ import Link from "next/link";
 import { useFinancialReports } from "../../data/financial-reports";
 import type { Transaction } from "../../lib/finance";
 import { formatDate, formatMoney, formatSignedMoney } from "../../lib/format";
-import { optionValue } from "../../lib/report-links";
+import { optionValues } from "../../lib/report-links";
 import { BreakdownList } from "../cards/breakdown-list";
 import { SectionCard } from "../cards/section-card";
-import { PeriodFields, ReportSelect, usePeriod } from "./report-filters";
+import { PeriodFields, ReportMultiSelect, usePeriod } from "./report-filters";
 import { ReportMetrics } from "./report-metrics";
 import { useReportQuery } from "./report-query";
 
@@ -15,7 +15,6 @@ const refundLabels = {
   completed: "Concluído",
 };
 const statusOptions = [
-  { value: "", label: "Todos os status" },
   { value: "pending", label: "Pendentes" },
   { value: "partial", label: "Parciais" },
   { value: "completed", label: "Concluídos" },
@@ -25,9 +24,9 @@ export function DemoRefunds({ transactionHref }: { transactionHref: (id: string)
   const { params, update } = useReportQuery();
   const { asOf, trackedRefunds } = useFinancialReports();
   const period = usePeriod(params, "todos");
-  const status = optionValue(params.get("status"), Object.keys(refundLabels));
+  const statuses = optionValues(params, "status", statusOptions);
   const results = trackedRefunds.filter(group =>
-    (!status || group.status === status)
+    (!statuses.size || statuses.has(group.status))
     && (period.includes(group.expense.date) || group.refunds.some(refund => period.includes(refund.date))),
   ).sort((first, second) => second.expense.date.localeCompare(first.expense.date));
 
@@ -35,7 +34,8 @@ export function DemoRefunds({ transactionHref }: { transactionHref: (id: string)
     <SectionCard id="acompanhamento" title="Acompanhar reembolsos">
       <div className="report-filters">
         <PeriodFields period={period} update={update} />
-        <ReportSelect label="Status" value={status} options={statusOptions} onChange={value => update({ status: value })} />
+        <ReportMultiSelect label="Status" placeholder="Todos os status"
+          selected={statuses} options={statusOptions} onChange={values => update({ status: values })} labeled />
       </div>
       <p className="report-muted">
         Compras ou recebimentos no período. O saldo pendente considera os valores recebidos até {formatDate(asOf)}.

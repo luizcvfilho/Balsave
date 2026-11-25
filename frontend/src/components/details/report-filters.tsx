@@ -1,3 +1,5 @@
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 import { useId, useSyncExternalStore } from "react";
 import { useFinancialReports } from "../../data/financial-reports";
 import { optionValue } from "../../lib/report-links";
@@ -33,6 +35,59 @@ export function ReportSelect({ label, value, options, onChange, disabled, varian
       </select>
     </div>
   );
+}
+
+export function ReportMultiSelect({ label, placeholder, selectionLabel = label, options, selected, onChange,
+  clearLabel = placeholder, description, labeled = false }: {
+  label: string;
+  placeholder: string;
+  selectionLabel?: string;
+  options: readonly Option[];
+  selected: ReadonlySet<string>;
+  onChange: (values: string[]) => void;
+  clearLabel?: string;
+  description?: string;
+  labeled?: boolean;
+}) {
+  const id = useId();
+  const ready = useSyncExternalStore(subscribe, clientSnapshot, serverSnapshot);
+  const field = (
+    <div className="balsave-picker balsave-picker-compact report-multi-picker">
+      <Select<string[]>
+        variant="standard"
+        disableUnderline
+        multiple
+        displayEmpty
+        value={[...selected]}
+        disabled={!ready || options.length === 0}
+        labelId={labeled ? id : undefined}
+        inputProps={{ "aria-label": label }}
+        renderValue={value => {
+          if (value.length === 0) return placeholder;
+          if (value.length === 1) return options.find(option => option.value === value[0])?.label ?? placeholder;
+          return `${selectionLabel} (${value.length})`;
+        }}
+        onChange={event => {
+          const value = event.target.value;
+          const next = typeof value === "string" ? [value] : value;
+          onChange(next.includes("") ? [] : next);
+        }}
+        MenuProps={{ slotProps: {
+          paper: { className: "report-multi-menu" },
+          list: { "aria-label": selectionLabel, "aria-description": description },
+        } }}
+      >
+        <MenuItem value="" disabled={selected.size === 0}>{clearLabel}</MenuItem>
+        {options.map(option => (
+          <MenuItem key={option.value} value={option.value}>
+            <span className="report-multi-check" aria-hidden="true">{selected.has(option.value) ? "✓" : ""}</span>
+            <span>{option.label}</span>
+          </MenuItem>
+        ))}
+      </Select>
+    </div>
+  );
+  return labeled ? <div className="report-field"><span id={id}>{label}</span>{field}</div> : field;
 }
 
 function readDate(value: string | null, asOf: string) {
