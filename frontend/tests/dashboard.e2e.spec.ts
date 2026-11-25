@@ -1,5 +1,37 @@
 import { expect, test } from "@playwright/test";
 
+test("manages categories and tags within the classification page", async ({ page }) => {
+  await page.goto("/gastos");
+  for (const tab of ["Por categoria", "Ritmo de gastos"]) {
+    const reports = page.getByRole("navigation", { name: "Detalhes de gastos" });
+    await reports.getByRole("link", { name: tab, exact: true }).click();
+    await expect(reports.getByRole("link", { name: tab, exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(reports.getByRole("link")).toHaveText(["Por categoria", "Ritmo de gastos"]);
+    await expect(page.getByRole("link", { name: /Gerenciar categorias/ })).toHaveCount(0);
+  }
+  const header = page.getByRole("banner");
+  const classifications = header.getByRole("link", { name: "Classificações", exact: true });
+  await classifications.click();
+  await expect(page).toHaveURL(/\/classificacoes$/);
+  await expect(classifications).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main")).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Classificações");
+  await expect(page.getByRole("searchbox", { name: "Buscar categoria" })).toBeVisible();
+  await page.getByRole("button", { name: "Regras", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Regras pessoais" })).toBeVisible();
+  const catalogs = page.getByRole("navigation", { name: "Catálogos de classificação" });
+  await expect(page.getByRole("main").getByRole("navigation")).toHaveCount(1);
+  await catalogs.getByRole("link", { name: "Etiquetas", exact: true }).click();
+  await expect(page).toHaveURL(/\/classificacoes\?aba=etiquetas$/);
+  await expect(page.getByRole("searchbox", { name: "Buscar etiqueta" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Mostra de cinema/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Classificações");
+  await page.goto("/etiquetas");
+  await expect(page).toHaveURL(/\/classificacoes\?aba=etiquetas$/);
+  await catalogs.getByRole("link", { name: "Categorias e regras", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Buscar categoria" })).toBeVisible();
+});
+
 test("opens demo account access from the profile menu", async ({ page }) => {
   await page.goto("/");
   const header = page.getByRole("banner");
@@ -27,7 +59,7 @@ test("shows shared navigation and updates spending charts independently", async 
   const header = page.getByRole("banner");
   await expect(header.getByRole("link", { name: "Balsave, visão geral" })).toHaveAttribute("href", "/");
   const nav = header.getByRole("navigation", { name: "Navegação principal" });
-  await expect(nav.getByRole("link")).toHaveText(["Visão geral", "Extrato", "Gastos", "Contas"]);
+  await expect(nav.getByRole("link")).toHaveText(["Visão geral", "Extrato", "Gastos", "Classificações", "Contas"]);
   await expect(nav.getByRole("link", { name: "Visão geral", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Lançamentos recentes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toHaveCount(0);
@@ -68,8 +100,8 @@ test("keeps category colors stable and communicates spending and transaction dir
   const transactions = page.getByRole("table", { name: "Lançamentos filtrados" });
   await expect(transactions.getByText(/\+R\$\s*6\.850,00/)).toHaveCSS("color", "rgb(36, 101, 70)");
   await expect(transactions.getByText(/\+R\$\s*500,00/)).toHaveCSS("color", "rgb(36, 101, 70)");
-  await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(25, 32, 29)");
-  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(25, 32, 29)");
+  await expect(transactions.getByText(/-R\$\s*230,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
+  await expect(transactions.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
 });
 
 test.describe("mobile layout", () => {
@@ -83,7 +115,7 @@ test.describe("mobile layout", () => {
     expect(profile?.x).toBeGreaterThan((logo?.x ?? 0) + (logo?.width ?? 0));
     expect(profile?.height).toBeGreaterThanOrEqual(44);
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
-    await expect(nav.getByRole("link")).toHaveText(["Início", "Extrato", "Gastos", "Contas"]);
+    await expect(nav.getByRole("link")).toHaveText(["Início", "Extrato", "Gastos", "Classificações", "Contas"]);
     const accounts = page.getByRole("region", { name: "Saldo em contas", exact: true });
     const cards = page.getByRole("region", { name: "Limite usado nos cartões" });
     await expect(accounts).toBeVisible();

@@ -364,9 +364,11 @@
 }
 .spending-category-tile svg { width: 18px; height: 18px; }
 .spending-report-metrics { margin-block: 18px 0; }
+.spending-report-metrics dl { display: flex; flex-wrap: wrap; }
 .spending-report-metrics dl > div { padding-inline: 0; border: 0; }
+.spending-report-metrics dl > div:first-child { flex: 1 1 240px; }
 .spending-report-metrics dl > div:first-child dd {
-  font-size: clamp(1.95rem, 4.2vw, 3.2rem);
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
   line-height: 1.1;
   letter-spacing: -.063em;
 }

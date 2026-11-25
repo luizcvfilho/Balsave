@@ -43,7 +43,6 @@ export async function FinancialPage({ children, showDemoWhenSignedOut = false, s
           </SectionCard>
           <nav className="report-navigation" aria-label="Configurações dos relatórios">
             <Link href="/conexoes">Conexões</Link>
-            <Link href="/categorias">Categorias e regras</Link>
           </nav>
         </main>
       );

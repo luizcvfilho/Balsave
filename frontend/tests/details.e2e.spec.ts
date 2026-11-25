@@ -9,6 +9,31 @@ async function chooseFilters(page: Page, label: string, ...options: string[]) {
   await page.keyboard.press("Escape");
 }
 
+test("keeps the spending total on one line in both themes", async ({ page }) => {
+  await page.goto("/gastos");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-10");
+  await expect(page).toHaveURL(/mes=2026-10/);
+  const total = page.getByRole("region", { name: "Gastos no período" }).locator("dd").first();
+  await expect(total).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const fits = await total.evaluate(element => {
+        const original = element.textContent;
+        element.textContent = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(7350.53);
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const onOneLine = range.getClientRects().length === 1 && range.getBoundingClientRect().width <= element.clientWidth;
+        element.textContent = original;
+        return onOneLine;
+      });
+      expect(fits, `${colorScheme}, ${width}px`).toBe(true);
+    }
+  }
+});
+
 test("opens the dedicated receivables page and returns to the selected status", async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on("pageerror", error => pageErrors.push(error));
@@ -194,7 +219,7 @@ test("reports the hotel net expense in the purchase month and the credit in the 
   await expect(hotel).toHaveCount(0);
 
   await page.goto("/lancamentos?mes=2026-10");
-  await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(89, 99, 94)");
+  await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
   await page.goto("/lancamentos?mes=2026-11");
   const credit = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Reembolso do hotel", exact: true }) });
   await expect(credit.getByText("11/11/2026")).toBeVisible();

@@ -40,10 +40,10 @@
   text-align: end;
 }
 
-.table th.description { width: 32%; }
-.table th.origin { width: 17%; }
-.table th.amount { width: 20%; }
-.table th.payment { width: 17%; }
+.table th.description { width: 26%; }
+.table th.origin { width: 15%; }
+.table th.amount { width: 16%; }
+.table th.payment { width: 14%; }
 
 .transactionTitle {
   position: relative;
@@ -96,6 +96,7 @@
 }
 
 .compactOrigin { display: none; }
+.cellLabel { display: none; }
 
 .chips {
   display: flex;
@@ -205,9 +206,14 @@
 
   .table .description { grid-area: 1 / 1; }
   .table td.origin { display: none; }
+  .table tbody tr { grid-template-columns: minmax(0, 1fr) minmax(108px, .86fr); }
   .table .classifications { grid-area: 2 / 1; }
+  .table .tags { grid-area: 2 / 2; }
   .table .payment { grid-area: 3 / 1 / auto / -1; margin-inline-start: 39px; }
-  .table tbody .amount { grid-area: 1 / 2 / span 2; align-self: center; max-width: 125px; }
+  .table tbody .amount { grid-area: 1 / 2; align-self: center; justify-self: end; max-width: 125px; }
+  .table tbody .description { grid-area: 1 / 1 / 2 / -1; padding-inline-end: 110px; }
+  .table .tags[data-empty] { grid-area: auto; position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  .cellLabel { display: block; margin-block-end: 3px; color: var(--muted); font-size: .6875rem; }
   .table .value { font-size: .78rem; }
 
   .transactionTitle { column-gap: 7px; }

@@ -26,6 +26,7 @@ export type TransactionRow = {
   netCents?: number;
   receivedCents?: number;
   annotation?: string;
+  classification?: string;
   tags?: readonly string[];
 };
 
@@ -43,11 +44,12 @@ export function orderedTransactions(rows: TransactionRow[], order = "recent") {
   });
 }
 
-export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, renderTags, balanceScope, amountHeading, compactDates = false, empty = "Nenhum lançamento para os filtros selecionados." }: {
+export function TransactionTable({ label, rows, getHref, showPaymentMethod = false, renderCategory, renderTags, balanceScope, amountHeading, compactDates = false, empty = "Nenhum lançamento para os filtros selecionados." }: {
   label: string;
   rows: TransactionRow[];
   getHref: (id: string) => string;
   showPaymentMethod?: boolean;
+  renderCategory?: (transaction: Transaction) => ReactNode;
   renderTags?: (transaction: Transaction) => ReactNode;
   balanceScope?: "account" | "consolidated";
   amountHeading?: string;
@@ -64,22 +66,29 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
         <tr role="row">
           <th role="columnheader" scope="col" className={styles.description}>Lançamento</th>
           <th role="columnheader" scope="col" className={styles.classifications}>Classificações</th>
+          <th role="columnheader" scope="col" className={styles.tags}>Etiquetas</th>
           <th role="columnheader" scope="col" className={styles.origin}>Banco / cartão</th>
           {showPaymentMethod && <th role="columnheader" scope="col" className={styles.payment}>Forma de pagamento</th>}
           <th role="columnheader" scope="col" className={styles.amount}>{amountHeading ?? (rows.some(row => row.netCents !== undefined) ? "Gasto líquido" : "Valor")}</th>
         </tr>
       </thead>
       <tbody role="rowgroup">
-        {rows.map(({ transaction, netCents, receivedCents, annotation, tags }) => {
+        {rows.map(({ transaction, netCents, receivedCents, annotation, classification, tags }) => {
           const origin = transactionInstitution(transaction);
           const categoryKey = transactionCategoryKey(transaction);
           const category = <CategoryChip categoryKey={categoryKey} categoryId={transaction.kind === "expense" ? transaction.categoryId : undefined} label={transactionCategory(transaction)} />;
+          const localTags = tags ?? transaction.tags ?? [];
+          const tagControl = renderTags?.(transaction) ?? (transaction.tagIds ?? []).flatMap(id => {
+            const tagName = tagNames.get(id);
+            return tagName ? [<TagChip key={id} id={id} label={tagName} />] : [];
+          });
+          const hasTags = localTags.length > 0 || (Array.isArray(tagControl) ? tagControl.length > 0 : Boolean(tagControl));
           const paymentMethod = transaction.paymentMethod ?? (transaction.cardId ? "credit_card" : undefined);
           const installment = transaction.kind === "expense" ? transaction.installment : undefined;
           const impact = balanceScope === "account" ? bankBalanceImpact(transaction)
             : balanceScope === "consolidated" ? ledgerBalanceImpact(transaction) : undefined;
-          const amountColor = impact === undefined ? amountColors[transaction.kind]
-            : impact < 0 && balanceScope === "consolidated" ? "var(--ink)" : balanceImpactColor(impact);
+          const useTransactionColor = impact === undefined || (balanceScope === "consolidated" && transaction.kind !== "transfer");
+          const amountColor = useTransactionColor ? amountColors[transaction.kind] : balanceImpactColor(impact);
           const date = formatNumericDate(transaction.date);
           return (
             <tr role="row" key={transaction.id}>
@@ -106,16 +115,20 @@ export function TransactionTable({ label, rows, getHref, showPaymentMethod = fal
                 </div>
               </td>
               <td role="cell" className={styles.classifications}>
+                <span className={styles.cellLabel} aria-hidden="true">Classificações</span>
                 <div className={styles.chips}>
-                  {transaction.kind === "expense" && live ? <Link className={styles.categoryAction}
+                  {renderCategory?.(transaction) ?? (transaction.kind === "expense" && live ? <Link className={styles.categoryAction}
                     href={getHref(transaction.id)} aria-label={`Alterar categoria de ${transaction.name}: ${transactionCategory(transaction)}`}>
                     {category}
-                  </Link> : category}
-                  {(tags ?? transaction.tags)?.map(tag => <TagChip key={tag} id={tag} label={tag} />)}
-                  {renderTags ? renderTags(transaction) : transaction.tagIds?.map(id => {
-                    const label = tagNames.get(id);
-                    return label ? <TagChip key={id} id={id} label={label} /> : null;
-                  })}
+                  </Link> : category)}
+                  {classification && <span>{classification}</span>}
+                </div>
+              </td>
+              <td role="cell" className={styles.tags} data-empty={!hasTags || undefined}>
+                {hasTags && <span className={styles.cellLabel} aria-hidden="true">Etiquetas</span>}
+                <div className={styles.chips}>
+                  {localTags.map(tag => <TagChip key={tag} id={tag} label={tag} />)}
+                  {tagControl}
                 </div>
               </td>
               <td role="cell" className={styles.origin}>

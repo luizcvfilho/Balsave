@@ -76,7 +76,7 @@ export function CategoryEditor({ transaction }: { transaction: Expense }) {
         {transaction.categorySource === "manual" && <button className="report-button" type="button" disabled={!live || pending} onClick={() => save(null)}>
           Restaurar classificação automática
         </button>}
-        <Link href="/categorias" className="report-link report-action">Gerenciar categorias</Link>
+        <Link href="/classificacoes" className="report-link report-action">Gerenciar categorias</Link>
       </div>
       {creating && <form action={() => startTransition(async () => {
         const result = await createCategory(viewKey, { name });

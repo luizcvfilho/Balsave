@@ -43,7 +43,6 @@ export function SpendingPage() {
       <ReportNavigation label="Detalhes de gastos" options={[
         { label: "Por categoria", href: href({ aba: undefined }), active: !rhythm },
         { label: "Ritmo de gastos", href: href({ aba: "ritmo" }), active: rhythm },
-        { label: "Categorias e regras", href: reportHref("/categorias", { painelMes: dashboardMonth ?? undefined, etiquetas: tagFilter.query }), active: false },
       ]} />
       {rhythm ? <SpendingRhythm tagFilter={tagFilter} /> : <CategoryExpenses period={period} tagFilter={tagFilter} />}
     </ReportLayout>
@@ -111,9 +110,9 @@ function CategoryExpenses({ period, tagFilter }: { period: ReturnType<typeof use
                 { label: "Compras", value: String(rows.length) },
               ]} />
             </div>
-            <Link className="report-link report-action" href={selectedCategories.size ? href({ categoria: undefined }) : reportHref("/categorias", { painelMes: dashboardMonth, etiquetas: tagFilter.query })}>
-              {selectedCategories.size ? "Limpar categorias" : "Gerenciar categorias"} →
-            </Link>
+            {selectedCategories.size > 0 && <Link className="report-link report-action" href={href({ categoria: undefined })}>
+              Limpar categorias →
+            </Link>}
           </SectionCard>
         </div>
         <SectionCard id="gastos-filtrados" title={activeCategory ? `Compras em ${activeCategory}` : "Compras registradas"}>

@@ -3,6 +3,17 @@ import { expect, type Page, test } from "@playwright/test";
 const emailDomain = "@category-e2e.example.test";
 const password = "balsave-category-browser-tests-only-password";
 
+async function openCategoryCreator(page: Page) {
+  await page.getByRole("button", { name: "Nova categoria", exact: true }).click();
+  return page.getByRole("dialog", { name: "Nova categoria", exact: true });
+}
+
+async function openRuleCreator(page: Page) {
+  await page.getByRole("button", { name: "Regras", exact: true }).click();
+  await page.getByRole("button", { name: "Nova regra", exact: true }).click();
+  return page.getByRole("dialog", { name: "Nova regra", exact: true });
+}
+
 async function signOut(page: Page) {
   const profile = page.getByRole("banner");
   await profile.getByLabel("Minha conta").click();
@@ -35,12 +46,17 @@ test("keeps categories and bank connections available through the main sections"
   await header.getByLabel("Minha conta").click();
   await expect(signIn).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
-  await nav.getByRole("link", { name: "Gastos", exact: true }).click();
-  await page.getByRole("link", { name: "Categorias e regras", exact: true }).click();
-  await expect(page).toHaveURL(/\/categorias$/);
+  await nav.getByRole("link", { name: "Classificações", exact: true }).click();
+  await expect(page).toHaveURL(/\/classificacoes$/);
   await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Criar categoria", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Nova categoria", exact: true })).toBeDisabled();
   await expect(signIn).toHaveCount(0);
+  await page.getByRole("link", { name: "Etiquetas", exact: true }).click();
+  await expect(page).toHaveURL(/\/classificacoes\?aba=etiquetas$/);
+  await expect(page.getByRole("button", { name: "Nova etiqueta", exact: true })).toBeDisabled();
+  await expect(nav.getByRole("link", { name: "Classificações", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: /^(Visão geral|Início)$/ })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Extrato", exact: true })).toBeVisible();
 
   await nav.getByRole("link", { name: "Contas", exact: true }).click();
   await page.getByRole("navigation", { name: "Detalhes de contas" }).getByRole("link", { name: "Conexões", exact: true }).click();
@@ -112,8 +128,8 @@ test("registers, signs out and keeps two browser sessions independent", async ({
     await otherPage.goto(new URL("/lancamentos", page.url()).href);
     const privateEntry = otherPage.getByRole("link", { name: "Loja de equipamentos", exact: true });
     await expect(privateEntry).toBeVisible();
-    await otherPage.goto("/categorias");
-    await expect(otherPage).toHaveURL(/\/categorias$/);
+    await otherPage.goto("/classificacoes");
+    await expect(otherPage).toHaveURL(/\/classificacoes$/);
     await signOut(otherPage);
     await expect(otherPage.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
     await otherPage.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
@@ -167,8 +183,8 @@ test.describe("authenticated category management", () => {
 
   test("rejects an old tab's category and logout actions after an account switch", async ({ page, context }) => {
     await page.addInitScript(() => Object.defineProperty(window, "BroadcastChannel", { value: undefined }));
-    await page.goto("/categorias");
-    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    await page.goto("/classificacoes");
+    const creator = await openCategoryCreator(page);
     await creator.getByLabel("Nome da categoria", { exact: true }).fill("Categoria da sessão anterior");
     const other = await context.newPage();
     try {
@@ -185,6 +201,7 @@ test.describe("authenticated category management", () => {
       const sessionChanged = "Sua sessão mudou. Recarregue a página e tente novamente.";
       await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
       await expect(creator.getByRole("alert")).toHaveText(sessionChanged);
+      await creator.getByRole("button", { name: "Cancelar", exact: true }).click();
       await signOut(page);
       await expect(page.getByRole("banner").getByRole("alert")).toHaveText(sessionChanged);
       await other.reload();
@@ -195,8 +212,8 @@ test.describe("authenticated category management", () => {
   });
 
   test("rejects a category mutation with an untrusted origin", async ({ page }) => {
-    await page.goto("/categorias");
-    await page.route("**/categorias", async route => {
+    await page.goto("/classificacoes");
+    await page.route("**/classificacoes", async route => {
       const outgoing = route.request();
       if (outgoing.method() !== "POST") return route.continue();
       const origin = new URL(outgoing.url());
@@ -204,22 +221,23 @@ test.describe("authenticated category management", () => {
       const response = await route.fetch({ headers: { ...await outgoing.allHeaders(), origin: origin.origin } });
       await route.fulfill({ response });
     });
-    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    const creator = await openCategoryCreator(page);
     await creator.getByLabel("Nome da categoria", { exact: true }).fill("Categoria fora da origem");
-    const post = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/categorias"));
+    const post = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/classificacoes"));
     await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
     await post;
-    await page.unroute("**/categorias");
+    await page.unroute("**/classificacoes");
     await page.reload();
-    await expect(page.getByLabel("Nome de Categoria fora da origem", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Categoria fora da origem/ })).toHaveCount(0);
   });
 
   test("creates, renames and archives personal categories while preserving a purchase choice", async ({ page }) => {
-    await page.goto("/categorias");
-    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    await page.goto("/classificacoes");
+    const creator = await openCategoryCreator(page);
     await creator.getByLabel("Nome da categoria", { exact: true }).fill("Escritório");
     await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
-    await expect(creator.getByRole("status")).toHaveText("Categoria criada.");
+    await expect(creator).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Escritório/ })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     await page.goto("/gastos?mes=2026-11");
@@ -235,14 +253,15 @@ test.describe("authenticated category management", () => {
     await page.reload();
     await expect(editor.getByLabel("Nova categoria da compra")).toHaveValue(selected);
 
-    await page.goto("/categorias");
-    await page.getByLabel("Nome de Escritório", { exact: true }).fill("Trabalho");
-    let category = page.getByRole("listitem").filter({ has: page.getByLabel("Nome de Escritório", { exact: true }) });
+    await page.goto("/classificacoes");
+    await page.getByRole("button", { name: /^Escritório/ }).click();
+    const category = page.getByRole("dialog", { name: "Editar categoria", exact: true });
+    await category.getByLabel("Nome da categoria", { exact: true }).fill("Trabalho");
     await category.getByRole("button", { name: "Salvar nome", exact: true }).click();
-    await expect(page.getByLabel("Nome de Trabalho", { exact: true })).toBeVisible();
-    category = page.getByRole("listitem").filter({ has: page.getByLabel("Nome de Trabalho", { exact: true }) });
+    await expect(category).toHaveCount(0);
+    await page.getByRole("button", { name: /^Trabalho/ }).click();
     await category.getByRole("button", { name: "Arquivar", exact: true }).click();
-    await expect(category.getByRole("button", { name: "Reativar", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Trabalho.*Arquivada/ })).toBeVisible();
 
     await page.goto("/lancamentos?lancamento=10000000-0000-0000-0000-000000000001.20000000-0000-0000-0000-000000000001");
     await expect(editor.getByText("Classificada por você · Trabalho", { exact: true })).toBeVisible();
@@ -254,14 +273,14 @@ test.describe("authenticated category management", () => {
 
   test("reports duplicate names and manages categories during a provider failure", async ({ page, request }) => {
     await request.post("http://127.0.0.1:8106/controls", { data: { snapshotUnavailable: true } });
-    await page.goto("/categorias");
-    const creator = page.getByRole("region", { name: "Criar categoria", exact: true });
+    await page.goto("/classificacoes");
+    const creator = await openCategoryCreator(page);
     await creator.getByLabel("Nome da categoria", { exact: true }).fill("Compras");
     await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
     await expect(creator.getByRole("alert")).toHaveText("Já existe uma categoria com esse nome. Escolha outro nome.");
     await creator.getByLabel("Nome da categoria", { exact: true }).fill("Casa");
     await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
-    await expect(page.getByLabel("Nome de Casa", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Casa/ })).toBeVisible();
   });
 
   test("refreshes a previously visited dashboard after a manual reclassification", async ({ page }) => {
@@ -278,6 +297,59 @@ test.describe("authenticated category management", () => {
     await expect(spending.getByRole("link", { name: /^Compras/ })).toHaveCount(0);
   });
 
+  test("assigns, creates and removes a category inline, then restores automatic classification", async ({ page }) => {
+    await page.goto("/lancamentos");
+    const category = page.getByRole("button", { name: /^Alterar categoria de Loja de equipamentos/ });
+    const chevron = page.locator('button[aria-label^="Alterar categoria de Loja de equipamentos"] svg:has(path[d="m6 9 6 6 6-6"])');
+    await expect(chevron).toBeVisible();
+    await expect(chevron).toHaveCSS("width", "14px");
+    const picker = page.getByRole("dialog", { name: "Classificação", exact: true });
+    await category.click();
+    await expect(chevron).toHaveCSS("transform", "matrix(-1, 0, 0, -1, 0, 0)");
+    await picker.getByRole("searchbox").fill("alimentacao");
+    await picker.getByRole("button", { name: "Alimentação", exact: true }).click();
+    await expect(category).toHaveText(/Alimentação/);
+    await expect(chevron).toHaveCSS("transform", "none");
+    await category.click();
+    await picker.getByRole("searchbox").fill("Papelaria");
+    await picker.getByRole("searchbox").press("Enter");
+    await expect(picker).not.toBeVisible();
+    await expect(category).toHaveText(/Papelaria/);
+    await category.click();
+    await picker.getByRole("button", { name: "Remover categoria", exact: true }).click();
+    await expect(category).toHaveAccessibleName(/Sem categoria/);
+    await page.reload();
+    await expect(category).toHaveText(/Adicionar categoria/);
+    await category.click();
+    await picker.getByRole("button", { name: "Usar classificação automática", exact: true }).click();
+    await expect(category).toHaveText(/Compras/);
+  });
+
+  test("deletes a custom category and restores the purchase's previous category", async ({ page }) => {
+    await page.goto("/lancamentos");
+    const trigger = page.getByRole("button", { name: /^Alterar categoria de Loja de equipamentos/ });
+    await expect(trigger).toHaveText(/Compras/);
+    await trigger.click();
+    const picker = page.getByRole("dialog", { name: "Classificação", exact: true });
+    await picker.getByRole("searchbox").fill("Temporária");
+    await picker.getByRole("searchbox").press("Enter");
+    await expect(trigger).toHaveText(/Temporária/);
+
+    await page.goto("/classificacoes");
+    const editor = page.getByRole("dialog", { name: "Editar categoria", exact: true });
+    await page.getByRole("button", { name: /^Compras/ }).click();
+    await expect(editor.getByRole("button", { name: "Excluir categoria" })).toHaveCount(0);
+    await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
+    await page.getByRole("button", { name: /^Temporária/ }).click();
+    await editor.getByRole("button", { name: "Excluir categoria", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Excluir categoria", exact: true });
+    await confirmation.getByRole("button", { name: "Confirmar exclusão" }).click();
+    await expect(confirmation).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Temporária/ })).toHaveCount(0);
+    await page.goto("/lancamentos");
+    await expect(trigger).toHaveText(/Compras/);
+  });
+
   test("explains that a changed transaction needs a refresh", async ({ page, request }) => {
     await page.goto("/lancamentos?lancamento=10000000-0000-0000-0000-000000000001.20000000-0000-0000-0000-000000000001");
     await request.post("http://127.0.0.1:8106/controls", { data: { assignmentConflict: true } });
@@ -288,8 +360,8 @@ test.describe("authenticated category management", () => {
   });
 
   test("previews rule history scope and supports disabling, reactivating and removing a rule", async ({ page }) => {
-    await page.goto("/categorias");
-    const creator = page.getByRole("region", { name: "Criar regra pessoal", exact: true });
+    await page.goto("/classificacoes");
+    const creator = await openRuleCreator(page);
     await creator.getByLabel("Categoria da regra").selectOption({ label: "Alimentação" });
     await creator.getByRole("combobox", { name: "Descrição da compra", exact: true }).selectOption("contains");
     await creator.getByLabel("Texto para identificar a compra").fill("Loja");
@@ -303,20 +375,24 @@ test.describe("authenticated category management", () => {
     await expect(creator.getByText("1 compra será reclassificada entre os lançamentos disponíveis.", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await creator.getByRole("button", { name: "Criar regra", exact: true }).click();
-    const rules = page.getByRole("region", { name: "Minhas regras", exact: true });
+    const rules = page.getByRole("region", { name: "Regras pessoais", exact: true });
     await expect(rules.getByRole("listitem")).toHaveCount(1);
     await page.goto("/lancamentos?lancamento=10000000-0000-0000-0000-000000000001.20000000-0000-0000-0000-000000000001");
     await expect(page.getByText("Classificada por uma regra pessoal · Alimentação", { exact: true })).toBeVisible();
-    await page.goto("/categorias");
-    await rules.getByRole("button", { name: "Desativar regra", exact: true }).click();
-    await expect(rules.getByText("Desativada", { exact: true })).toBeVisible();
-    await rules.getByRole("button", { name: "Editar e reativar", exact: true }).click();
-    await expect(rules.getByRole("button", { name: "Salvar regra", exact: true })).toBeDisabled();
-    await rules.getByRole("button", { name: "Revisar compras afetadas", exact: true }).click();
-    await rules.getByRole("button", { name: "Salvar regra", exact: true }).click();
-    await expect(rules.getByText("Ativa", { exact: true })).toBeVisible();
-    await rules.getByRole("button", { name: "Remover regra", exact: true }).click();
-    await rules.getByRole("button", { name: "Confirmar remoção", exact: true }).click();
+    await page.goto("/classificacoes");
+    await page.getByRole("button", { name: "Regras", exact: true }).click();
+    await rules.getByRole("button", { name: /^Loja/ }).click();
+    const editor = page.getByRole("dialog", { name: "Editar regra", exact: true });
+    await editor.getByRole("button", { name: "Desativar regra", exact: true }).click();
+    await expect(rules.getByRole("button", { name: /Loja.*Desativada/ })).toBeVisible();
+    await rules.getByRole("button", { name: /^Loja/ }).click();
+    await expect(editor.getByRole("button", { name: "Salvar regra", exact: true })).toBeDisabled();
+    await editor.getByRole("button", { name: "Revisar compras afetadas", exact: true }).click();
+    await editor.getByRole("button", { name: "Salvar regra", exact: true }).click();
+    await expect(rules.getByRole("button", { name: /Loja.*Ativa/ })).toBeVisible();
+    await rules.getByRole("button", { name: /^Loja/ }).click();
+    await editor.getByRole("button", { name: "Remover regra", exact: true }).click();
+    await editor.getByRole("button", { name: "Confirmar remoção", exact: true }).click();
     await expect(rules.getByText("Nenhuma regra criada.", { exact: true })).toBeVisible();
   });
 
@@ -338,8 +414,8 @@ test.describe("authenticated category management", () => {
   });
 
   test("requires a new review when data changes after the rule preview", async ({ page, request }) => {
-    await page.goto("/categorias");
-    const creator = page.getByRole("region", { name: "Criar regra pessoal", exact: true });
+    await page.goto("/classificacoes");
+    const creator = await openRuleCreator(page);
     await creator.getByLabel("Categoria da regra").selectOption({ label: "Alimentação" });
     await creator.getByLabel("Texto para identificar a compra").fill("Loja de equipamentos");
     await creator.getByLabel("Aplicar a compras de").selectOption("history");

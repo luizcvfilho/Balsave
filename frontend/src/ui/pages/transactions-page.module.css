@@ -35,6 +35,9 @@
   margin-block: 0 12px;
 }
 
+.incoming { color: var(--positive); }
+.outgoing { color: var(--negative); }
+
 .panel {
   position: relative;
   min-width: 0;

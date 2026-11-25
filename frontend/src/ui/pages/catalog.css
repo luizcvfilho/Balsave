@@ -1,0 +1,19 @@
+.catalog-list { list-style: none; margin: 0; padding: 0; }
+.catalog-list li + li { border-top: 1px solid var(--border); }
+.catalog-row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 14px 4px; border: 0; background: transparent; color: var(--text-primary); text-align: left; font: inherit; }
+button.catalog-row { cursor: pointer; }
+button.catalog-row:hover { color: var(--primary); }
+.catalog-row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.catalog-row-content { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.catalog-row-meta { color: var(--text-secondary); font-size: .8125rem; }
+.catalog-arrow { color: var(--text-secondary); font-size: 1.25rem; }
+.catalog-search { max-width: 24rem; margin: 12px 0; }
+.catalog-search input { width: 100%; }
+.catalog-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.catalog-dialog-form .report-field { width: 100%; }
+.catalog-dialog-form .report-field input { width: 100%; }
+
+.catalog-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.catalog-tabs [aria-pressed="true"] { border-color: var(--primary); color: var(--primary); }
+.catalog-embedded { display: grid; min-width: 0; gap: 20px; }
+.catalog-dialog-actions .catalog-delete { color: var(--negative); }

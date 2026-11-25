@@ -1,12 +1,8 @@
 "use client";
 
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogTitle from "@mui/material/DialogTitle";
 import { useState } from "react";
 import { SectionCard } from "../../components/cards/section-card";
+import { CategorySelector, TagSelector } from "../../components/details/classification-selectors";
 import { CategoryEditor } from "../../components/details/category-editor";
 import { DemoRefundDetail, DemoRefunds } from "../../components/details/demo-refunds";
 import { ReceivableDetail, ReceivablesList } from "../../components/details/receivable-view";
@@ -92,7 +88,6 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
 }) {
   const { params, href, update } = useReportQuery();
   const { live, accounts, cards, investments, reportedTransactions, receivableCredits, transactionInstitution } = useFinancialReports();
-  const [editingId, setEditingId] = useState<string>();
   const annotations = useReceiptAnnotations(!live);
   const ledgerCategoryOptions = useCategoryOptions(true);
   const typeOptions = live ? kindOptions : kindOptions.filter(option => option.value !== "credit");
@@ -106,30 +101,9 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
     .map(card => ({ value: card.id, label: cardLabel(card) }));
   const cardIds = optionValues(params, "cartao", cardOptions);
   const tagNames = new Map(tagFilter.tags.map(tag => [tag.id, tag.name]));
-  const editing = editingId ? reportedTransactions.find(transaction => transaction.id === editingId) : undefined;
 
   function transactionTagNames(transaction: Transaction) {
     return transaction.tagIds?.map(id => tagNames.get(id)) ?? [];
-  }
-
-  function renderTags(transaction: Transaction) {
-    if (transaction.tagIds === undefined) return null;
-    const tags = transaction.tagIds.flatMap(id => {
-      const label = tagNames.get(id);
-      return label ? [{ id, label }] : [];
-    });
-    const names = tags.map(tag => tag.label).join(", ");
-    return (
-      <button
-        className={styles.tagButton}
-        type="button"
-        aria-haspopup="dialog"
-        aria-label={names ? `Editar etiquetas de ${transaction.name}: ${names}` : `Adicionar etiquetas a ${transaction.name}`}
-        onClick={() => setEditingId(transaction.id)}
-      >
-        {tags.length ? tags.map(tag => <TagChip key={tag.id} {...tag} />) : "Adicionar etiquetas"}
-      </button>
-    );
   }
 
   const matches = reportedTransactions.flatMap(transaction => {
@@ -138,7 +112,6 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
     const receivable = receivableCredits.get(transaction.id);
     const appliedCents = receivable?.appliedCents ?? 0;
     const labels = [
-      annotation?.classification,
       appliedCents > 0 ? `Reembolso: ${formatMoney(appliedCents)}` : undefined,
       receivable?.surplusCents ? `Excedente: ${formatMoney(receivable.surplusCents)}` : undefined,
     ];
@@ -151,8 +124,8 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
       || (categories.size > 0 && !categories.has(transactionCategoryKey(transaction)))
       || (banks.size > 0 && (!origin || !banks.has(origin.bank)))
       || (cardIds.size > 0 && (!transaction.cardId || !cardIds.has(transaction.cardId)))
-      || !matchesSearch(search, transaction.name, transactionCategory(transaction), origin?.label, ...labels, ...tags, ...transactionTagNames(transaction))) return [];
-    return [{ transaction, annotation: labels.filter(Boolean).join(" · "), tags }];
+      || !matchesSearch(search, transaction.name, transactionCategory(transaction), origin?.label, annotation?.classification, ...labels, ...tags, ...transactionTagNames(transaction))) return [];
+    return [{ transaction, annotation: labels.filter(Boolean).join(" · "), classification: annotation?.classification, tags }];
   });
   const rows = orderedTransactions(matches, order);
   const totals = transactionTotals(rows.map(row => row.transaction));
@@ -173,8 +146,8 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
       </div>
       <section id="historico-lancamentos" aria-labelledby="historico-lancamentos-title">
         <ReportMetrics items={[
-          { label: "Entradas", value: formatMoney(totals.incomingCents) },
-          { label: "Saídas", value: formatMoney(totals.outgoingCents) },
+          { label: "Entradas", value: <span className={styles.incoming}>{formatMoney(totals.incomingCents)}</span> },
+          { label: "Saídas", value: <span className={styles.outgoing}>{formatMoney(totals.outgoingCents)}</span> },
           { label: "Total líquido", value: formatMoney(totals.netCents) },
         ]} />
         <div className={styles.panel}>
@@ -195,29 +168,11 @@ function TransactionLedger({ period, search, setSearch, tagFilter }: {
             rows={rows}
             balanceScope="consolidated"
             getHref={id => href({ lancamento: id })}
-            renderTags={live ? renderTags : undefined}
+            renderCategory={live ? transaction => transaction.kind === "expense" ? <CategorySelector transaction={transaction} /> : <CategoryChip categoryKey={transactionCategoryKey(transaction)} label={transactionCategory(transaction)} /> : undefined}
+            renderTags={live ? transaction => transaction.tagIds !== undefined ? <TagSelector transaction={transaction} /> : null : undefined}
           />
         </div>
       </section>
-      {live && editing?.tagIds !== undefined && (
-        <Dialog
-          open
-          fullWidth
-          onClose={() => setEditingId(undefined)}
-          aria-labelledby="etiquetas-dialog-title"
-          aria-describedby="etiquetas-dialog-transaction"
-          slotProps={{ paper: { sx: { bgcolor: "var(--surface)", color: "var(--text-primary)", borderRadius: "var(--radius-card)", m: { xs: 2, sm: 4 } } } }}
-        >
-          <DialogTitle id="etiquetas-dialog-title">Editar etiquetas</DialogTitle>
-          <DialogContent dividers>
-            <DialogContentText id="etiquetas-dialog-transaction" sx={{ mb: 2 }}>{editing.name}</DialogContentText>
-            <TagEditor key={editing.id} entryId={editing.id} tagIds={editing.tagIds} tags={tagFilter.tags} />
-          </DialogContent>
-          <DialogActions>
-            <button className="report-button" type="button" onClick={() => setEditingId(undefined)}>Fechar</button>
-          </DialogActions>
-        </Dialog>
-      )}
     </div>
   );
 }
