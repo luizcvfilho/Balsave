@@ -11,7 +11,7 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/lancamentos");
   const ledger = page.getByRole("region", { name: "Histórico de lançamentos" });
-  await expect(ledger.getByRole("columnheader", { name: "Etiquetas" })).toHaveCount(1);
+  await expect(ledger.getByRole("columnheader", { name: "Classificações" })).toHaveCount(1);
   await ledger.getByRole("button", { name: "Adicionar etiquetas a Loja de equipamentos" }).click();
   const editor = page.getByRole("dialog", { name: "Editar etiquetas" });
   await expect(editor).toBeVisible();
@@ -26,7 +26,10 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
   await editor.getByRole("button", { name: "Fechar", exact: true }).click();
   await expect(page).toHaveURL(/\/lancamentos$/);
   const editTags = ledger.getByRole("button", { name: /^Editar etiquetas de Loja de equipamentos/ });
-  await expect(editTags).toContainText("Trabalho · Viagem");
+  const work = editTags.getByText("Trabalho", { exact: true });
+  await expect(work).toBeVisible();
+  await expect(editTags.getByText("Viagem", { exact: true })).toBeVisible();
+  const workColor = await work.getAttribute("data-color");
   await page.reload();
   await editTags.click();
   await expect(editor.getByRole("checkbox", { name: "Trabalho" })).toBeChecked();
@@ -41,6 +44,7 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
   await page.keyboard.press("Escape");
   await expect(editor).toHaveCount(0);
   await expect(editTags).toBeFocused();
+  expect(await editTags.getByText("Escritório", { exact: true }).getAttribute("data-color")).toBe(workColor);
 
   await page.getByText("Filtrar por etiquetas", { exact: true }).click();
   const purchase = ledger.getByRole("link", { name: "Loja de equipamentos", exact: true });
@@ -65,7 +69,7 @@ test("creates, assigns, renames, filters and removes personal tags", async ({ pa
 
   await page.getByRole("link", { name: "Voltar ao painel" }).click();
   await expect(page.getByRole("region", { name: "Gastos por categoria" }).getByText(/^R\$\s125,00$/)).toBeVisible();
-  await page.getByRole("link", { name: "Ver detalhes de Gastos por categoria" }).click();
+  await page.getByRole("link", { name: "Ver gastos", exact: true }).click();
   await expect(page).toHaveURL(/etiquetas=/);
   await expect(page.getByRole("region", { name: "Compras no período" }).locator("dl").getByText(/^R\$\s125,00$/)).toBeVisible();
 

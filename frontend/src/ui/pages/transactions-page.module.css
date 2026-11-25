@@ -1,0 +1,103 @@
+.ledger {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.period { align-items: end; }
+
+.period > :global(.report-field) {
+  flex-basis: 180px;
+}
+
+.primaryFilters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, clamp(140px, 16vw, 200px)));
+  gap: 8px;
+}
+
+.secondaryFilters summary {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 22px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondaryFilters summary::-webkit-details-marker { display: none; }
+.secondaryFilters summary::after { content: "+"; font-size: .95rem; }
+.secondaryFilters[open] summary::after { content: "−"; }
+.secondaryFilters > div { padding: 0 22px 12px; }
+.secondaryFilters:not([open]) > div { display: none; }
+
+.ledger :global(.report-metrics) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-block: 0 12px;
+}
+
+.panel {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.panelHeading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px 12px;
+  padding: 17px 112px 16px 24px;
+}
+
+.panelHeading h2 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 660;
+}
+
+.tagButton {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  text-align: start;
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tagButton:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+@media (max-width: 760px) {
+  .ledger { gap: 14px; }
+  .primaryFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panelHeading { padding: 15px 88px 15px 15px; }
+  .secondaryFilters summary { inset-inline-end: 12px; font-size: .7rem; }
+  .secondaryFilters > div { padding-inline: 15px; }
+  .ledger :global(.report-metrics) { gap: 6px; }
+  .ledger :global(.report-metrics > div) { padding: 10px 8px; }
+  .ledger :global(.report-metrics dt) { font-size: .805rem; }
+  .ledger :global(.report-metrics dd) { font-size: clamp(.8rem, 3.5vw, 1.08rem); }
+}

@@ -43,11 +43,13 @@ function buildReports(data: FinancialData, live: boolean) {
     ...plannedInstallments.map(plan => [plan.categoryKey ?? categoryKeyForLabel(plan.category), plan.category] as const),
   ]).entries()].map(([value, label]) => ({ value, label }))
     .sort((first, second) => first.label.localeCompare(second.label, "pt-BR"));
-  const sources = new Map(accounts.map(account => [account.id, `${account.bank} · ${account.name}`]));
+  const sources = new Map<string, { bank: string; detail: string; label: string; cardEnding?: string }>([...accounts, ...investments].map(({ id, bank, name }) => [id, {
+    bank, detail: name, label: `${bank} · ${name}`,
+  }]));
   for (const card of cards) {
-    sources.set(card.id, cardLabel(card));
+    const detail = card.lastFour ? `Cartão •••• ${card.lastFour}` : card.name || "Cartão";
+    sources.set(card.id, { bank: card.bank, detail, label: cardLabel(card), cardEnding: card.lastFour });
   }
-  for (const investment of investments) sources.set(investment.id, `${investment.bank} · ${investment.name}`);
 
   function paceChartPoints(month: string, monthlySpending = spending) {
     const end = month === currentMonth ? asOf : `${month}-${daysInMonth(month)}`;
@@ -101,13 +103,17 @@ function buildReports(data: FinancialData, live: boolean) {
   }
 
   function transactionSource({ accountId, cardId, investmentId }: Transaction) {
-    return sources.get(accountId ?? cardId ?? investmentId ?? "");
+    return sources.get(accountId ?? cardId ?? investmentId ?? "")?.label;
+  }
+
+  function transactionInstitution({ accountId, cardId, investmentId }: Transaction) {
+    return (cardId && sources.get(cardId)) || sources.get(accountId ?? investmentId ?? "");
   }
 
   return {
     ...data, tags, investments, positions, receivableGroups, receivables, receivableCredits, live, currentMonth, months, monthOptions, reportedTransactions, spending, expenses, trackedRefunds,
     plannedInstallments, planningMonths, planningMonthOptions, planningMaxDate,
-    expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource,
+    expenseCategories, paceChartPoints, canCompare, balanceHistory, balanceChartPoint, transactionSource, transactionInstitution,
   };
 }
 

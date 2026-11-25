@@ -1,0 +1,49 @@
+.chip {
+  --chip-ink: #404d45;
+  --chip-fill: #eef2ef;
+  --chip-edge: #85928a;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  color: var(--chip-ink);
+  font-size: .72rem;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.category {
+  border-radius: 6px;
+  background: var(--chip-fill);
+}
+
+.tag {
+  border-color: var(--chip-edge);
+  border-radius: 999px;
+}
+
+.chip svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.chip[data-color="gold"] { --chip-ink: #73520c; --chip-fill: #fff3d6; --chip-edge: #9b7325; }
+.chip[data-color="blue"] { --chip-ink: #334977; --chip-fill: #edf1fc; --chip-edge: #7487b2; }
+.chip[data-color="pink"] { --chip-ink: #773765; --chip-fill: #faedf6; --chip-edge: #a16a92; }
+.chip[data-color="teal"] { --chip-ink: #1d5266; --chip-fill: #e6f3f8; --chip-edge: #578a9f; }
+.chip[data-color="green"] { --chip-ink: #256146; --chip-fill: #e8f4ec; --chip-edge: #588971; }
+.chip[data-color="purple"] { --chip-ink: #63418c; --chip-fill: #f3edfa; --chip-edge: #9479b6; }
+.chip[data-color="copper"] { --chip-ink: #853f2d; --chip-fill: #faede6; --chip-edge: #a76d58; }
+
+:global([data-theme="dark"]) .chip { --chip-ink: #d2dcd6; --chip-fill: #2a332d; --chip-edge: #83938a; }
+:global([data-theme="dark"]) .chip[data-color="gold"] { --chip-ink: #f6d594; --chip-fill: #3b3020; --chip-edge: #a6884d; }
+:global([data-theme="dark"]) .chip[data-color="blue"] { --chip-ink: #c0d1fa; --chip-fill: #293348; --chip-edge: #8799c1; }
+:global([data-theme="dark"]) .chip[data-color="pink"] { --chip-ink: #efc2e3; --chip-fill: #402d3b; --chip-edge: #ad80a0; }
+:global([data-theme="dark"]) .chip[data-color="teal"] { --chip-ink: #b6e1f1; --chip-fill: #25404a; --chip-edge: #6b9fb2; }
+:global([data-theme="dark"]) .chip[data-color="green"] { --chip-ink: #b3e5c7; --chip-fill: #274134; --chip-edge: #6ba184; }
+:global([data-theme="dark"]) .chip[data-color="purple"] { --chip-ink: #dbc5f6; --chip-fill: #372c48; --chip-edge: #9a83b7; }
+:global([data-theme="dark"]) .chip[data-color="copper"] { --chip-ink: #f4c0af; --chip-fill: #452f28; --chip-edge: #ae8274; }

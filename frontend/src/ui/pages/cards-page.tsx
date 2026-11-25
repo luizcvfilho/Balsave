@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
-import { ReportLayout } from "../../components/details/report-layout";
+import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
 import { useReportQuery } from "../../components/details/report-query";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
@@ -36,7 +36,14 @@ export function CardsPage() {
   const invoice = charges.reduce((sum, charge) => sum + charge.amountCents, 0);
 
   return (
-    <ReportLayout title="Cartões" dashboardMonth={dashboardMonth}>
+    <ReportLayout title="Cartões" description="Consulte seus limites e acompanhe as faturas." dashboardMonth={dashboardMonth}>
+      <ReportNavigation label="Detalhes de contas" options={[
+        { label: "Contas", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined }), active: false },
+        { label: "Evolução", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined, aba: "evolucao" }), active: false },
+        { label: "Conciliação", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined, aba: "conciliacao" }), active: false },
+        { label: "Cartões", href: href({}), active: true },
+        { label: "Conexões", href: "/conexoes", active: false },
+      ]} />
       <SectionCard id="limites" title="Limites dos cartões">
         {cards.length ? <ReportMetrics items={limitMetrics(totals)} /> : (
           <p className="report-muted">Nenhum cartão em reais disponível.</p>

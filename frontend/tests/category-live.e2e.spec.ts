@@ -1,7 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 const emailDomain = "@category-e2e.example.test";
 const password = "balsave-category-browser-tests-only-password";
+
+async function signOut(page: Page) {
+  const profile = page.getByRole("banner");
+  await profile.getByLabel("Minha conta").click();
+  await profile.getByRole("button", { name: "Sair", exact: true }).click();
+}
 
 for (const testPassword of ["x", "Ab#ç💠".repeat(1024)]) {
   test(`accepts a password of ${Array.from(testPassword).length} characters`, async ({ page, request }) => {
@@ -13,7 +19,7 @@ for (const testPassword of ["x", "Ab#ç💠".repeat(1024)]) {
     await page.getByRole("button", { name: "Criar conta", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Sair", exact: true }).click();
+    await signOut(page);
     await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
     await page.getByLabel("E-mail").fill(`teste-senha${emailDomain}`);
     await page.getByLabel("Senha", { exact: true }).fill(testPassword);
@@ -22,18 +28,22 @@ for (const testPassword of ["x", "Ab#ç💠".repeat(1024)]) {
   });
 }
 
-test("keeps categories and bank connections available from the demo header", async ({ page }) => {
+test("keeps categories and bank connections available through the main sections", async ({ page }) => {
   await page.goto("/");
   const header = page.getByRole("banner");
   const signIn = header.getByRole("link", { name: "Entrar", exact: true });
+  await header.getByLabel("Minha conta").click();
   await expect(signIn).toBeVisible();
-  await header.getByRole("link", { name: "Categorias", exact: true }).click();
+  const nav = page.getByRole("navigation", { name: "Navegação principal" });
+  await nav.getByRole("link", { name: "Gastos", exact: true }).click();
+  await page.getByRole("link", { name: "Categorias e regras", exact: true }).click();
   await expect(page).toHaveURL(/\/categorias$/);
   await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Criar categoria", exact: true })).toBeDisabled();
   await expect(signIn).toHaveCount(0);
 
-  await header.getByRole("link", { name: "Conectar bancos", exact: true }).click();
+  await nav.getByRole("link", { name: "Contas", exact: true }).click();
+  await page.getByRole("navigation", { name: "Detalhes de contas" }).getByRole("link", { name: "Conexões", exact: true }).click();
   await expect(page).toHaveURL(/\/conexoes$/);
   await expect(page.getByRole("heading", { name: "Conexões bancárias", exact: true })).toBeVisible();
   await expect(signIn).toHaveCount(0);
@@ -47,6 +57,7 @@ test("registers, signs out and keeps two browser sessions independent", async ({
   await expect(page.getByText("Dados fictícios", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Saldo em contas", exact: true })).toBeVisible();
   const signIn = page.getByRole("banner").getByRole("link", { name: "Entrar", exact: true });
+  await page.getByRole("banner").getByLabel("Minha conta").click();
   await signIn.click();
   await expect(page).toHaveURL(/\/acesso$/);
   await expect(signIn).toHaveCount(0);
@@ -72,6 +83,7 @@ test("registers, signs out and keeps two browser sessions independent", async ({
   try {
     const otherPage = await otherContext.newPage();
     await otherPage.goto(new URL("/", page.url()).href);
+    await otherPage.getByRole("banner").getByLabel("Minha conta").click();
     await otherPage.getByRole("banner").getByRole("link", { name: "Entrar", exact: true }).click();
     await expect(otherPage).toHaveURL(/\/acesso$/);
     await otherPage.getByLabel("E-mail").fill(`BROWSER-OWNER${emailDomain}`);
@@ -81,7 +93,7 @@ test("registers, signs out and keeps two browser sessions independent", async ({
     await expect(otherPage.getByText("Dados do Meu Pluggy", { exact: true })).toBeVisible();
     await expect(otherPage.getByRole("link", { name: "Entrar", exact: true })).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Sair", exact: true }).click();
+    await signOut(page);
     await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
     await page.goto("/lancamentos");
     await expect(page).toHaveURL(/\/acesso$/);
@@ -100,9 +112,9 @@ test("registers, signs out and keeps two browser sessions independent", async ({
     await otherPage.goto(new URL("/lancamentos", page.url()).href);
     const privateEntry = otherPage.getByRole("link", { name: "Loja de equipamentos", exact: true });
     await expect(privateEntry).toBeVisible();
-    await otherPage.getByRole("link", { name: "Categorias", exact: true }).click();
+    await otherPage.goto("/categorias");
     await expect(otherPage).toHaveURL(/\/categorias$/);
-    await otherPage.getByRole("button", { name: "Sair", exact: true }).click();
+    await signOut(otherPage);
     await expect(otherPage.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
     await otherPage.getByLabel("E-mail").fill(`nova-conta${emailDomain}`);
     await otherPage.getByLabel("Senha", { exact: true }).fill(password);
@@ -136,7 +148,7 @@ test.describe("authenticated category management", () => {
     const other = await context.newPage();
     try {
       await other.goto("/");
-      await other.getByRole("button", { name: "Sair", exact: true }).click();
+      await signOut(other);
       await expect(page.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
       await expect(privateEntry).toHaveCount(0);
 
@@ -161,7 +173,7 @@ test.describe("authenticated category management", () => {
     const other = await context.newPage();
     try {
       await other.goto("/");
-      await other.getByRole("button", { name: "Sair", exact: true }).click();
+      await signOut(other);
       await expect(other.getByRole("heading", { name: "Acesse sua conta" })).toBeVisible();
       await other.goto("/acesso?modo=cadastro");
       await other.getByLabel("Nome", { exact: true }).fill("Nova conta");
@@ -173,9 +185,8 @@ test.describe("authenticated category management", () => {
       const sessionChanged = "Sua sessão mudou. Recarregue a página e tente novamente.";
       await creator.getByRole("button", { name: "Criar categoria", exact: true }).click();
       await expect(creator.getByRole("alert")).toHaveText(sessionChanged);
-      const navigation = page.getByRole("navigation", { name: "Navegação principal" });
-      await navigation.getByRole("button", { name: "Sair", exact: true }).click();
-      await expect(navigation.getByRole("alert")).toHaveText(sessionChanged);
+      await signOut(page);
+      await expect(page.getByRole("banner").getByRole("alert")).toHaveText(sessionChanged);
       await other.reload();
       await expect(other.getByRole("heading", { name: "Conecte seus bancos" })).toBeVisible();
     } finally {
@@ -262,7 +273,7 @@ test.describe("authenticated category management", () => {
     await editor.getByLabel("Nova categoria da compra").selectOption({ label: "Alimentação" });
     await editor.getByRole("button", { name: "Salvar categoria", exact: true }).click();
     await expect(editor.getByText("Classificada por você · Alimentação", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "Balsave, início", exact: true }).click();
+    await page.getByRole("link", { name: "Balsave, visão geral", exact: true }).click();
     await expect(spending.getByRole("link", { name: /^Alimentação/ })).toBeVisible();
     await expect(spending.getByRole("link", { name: /^Compras/ })).toHaveCount(0);
   });
@@ -343,6 +354,8 @@ test.describe("authenticated category management", () => {
   test("loads authenticated financial data without real credentials", async ({ page }) => {
     await page.goto("/lancamentos?lancamento=10000000-0000-0000-0000-000000000001.20000000-0000-0000-0000-000000000001");
     await expect(page.getByRole("heading", { name: "Loja de equipamentos", exact: true })).toBeVisible();
-    await expect(page.getByText("Banco fictício · Conta de teste", { exact: true })).toBeVisible();
+    const details = page.getByRole("region", { name: "Saída", exact: true });
+    await expect(details.getByText("Banco fictício")).toBeVisible();
+    await expect(details.getByText("Conta de teste", { exact: true })).toBeVisible();
   });
 });

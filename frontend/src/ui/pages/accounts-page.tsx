@@ -33,27 +33,23 @@ export function AccountsPage() {
   const account = accounts.find(account => account.id === params.get("conta") && (!bank || bank === account.bank));
 
   return (
-    <ReportLayout title={reconciliation ? "Conciliação de movimentações" : evolution
-      ? (investments.length ? "Evolução de contas e investimentos" : "Evolução do saldo em contas") : "Saldo em contas"} dashboardMonth={params.get("painelMes")}>
+    <ReportLayout title={reconciliation ? "Conciliação" : evolution ? "Evolução do saldo" : "Contas"}
+      description="Veja seus saldos, investimentos e movimentações." dashboardMonth={params.get("painelMes")}
+      controls={<ReportSelect label="Instituição" variant="compact" value={bank} options={bankOptions}
+        onChange={value => update({ banco: value, conta: undefined })} />}>
       <ReportNavigation label="Detalhes de contas" options={[
         { label: "Contas", href: href({ aba: undefined }), active: !evolution && !reconciliation },
         { label: "Evolução", href: href({ aba: "evolucao" }), active: evolution },
         { label: "Conciliação", href: href({ aba: "conciliacao" }), active: reconciliation },
+        { label: "Cartões", href: reportHref("/cartoes", { painelMes: params.get("painelMes") ?? undefined }), active: false },
+        { label: "Conexões", href: "/conexoes", active: false },
       ]} />
-      <SectionCard id="filtros-contas" title="Instituições">
-        <div className="report-filters">
-          <ReportSelect
-            label="Instituição"
-            value={bank}
-            options={bankOptions}
-            onChange={value => update({ banco: value, conta: undefined })}
-          />
-        </div>
-      </SectionCard>
       {reconciliation ? <Reconciliation /> : evolution ? <BalanceEvolution bank={bank} /> : (
         <>
-          <AccountBalances bank={bank} activeAccount={account?.id} />
-          <InvestmentBalances bank={bank} />
+          <div className="report-columns">
+            <AccountBalances bank={bank} activeAccount={account?.id} />
+            <InvestmentBalances bank={bank} />
+          </div>
           {account && <AccountStatement account={account} />}
         </>
       )}
@@ -64,9 +60,11 @@ export function AccountsPage() {
 function InvestmentBalances({ bank }: { bank: string }) {
   const { investments, positions, failedInvestments } = useFinancialReports();
   const visible = investments.filter(position => !bank || position.bank === bank);
-  if (!investments.length && !failedInvestments) return null;
+  if (!investments.length && !failedInvestments) return <SectionCard id="saldos-investimentos" title="Investimentos" highlighted>
+    <p className="report-muted">Nenhum investimento acompanhado.</p>
+  </SectionCard>;
   const tracked = positions.filter(position => !bank || position.bank === bank);
-  return <SectionCard id="saldos-investimentos" title="Contas e investimentos"
+  return <SectionCard id="saldos-investimentos" title="Investimentos" highlighted
     description="Investimentos indicados como incluídos no saldo da conta são contados uma única vez.">
     <ReportMetrics items={[{ label: "Saldo consolidado acompanhado", value: tracked.every(position => position.balanceCents !== null)
       ? formatMoney(tracked.reduce((sum, position) => sum + (position.balanceCents ?? 0), 0)) : "Indisponível" }]} />

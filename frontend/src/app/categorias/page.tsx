@@ -3,17 +3,15 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { SectionCard } from "../../components/cards/section-card";
 import type { CategoryAccountOption, CategoryRule, LocalCategory } from "../../data/financial-data";
-import { mockTransactions } from "../../data/mock-data";
 import { financialRequest, sessionView } from "../../data/session";
-import { categoryKeyForLabel, transactionCategory } from "../../lib/finance";
+import { defaultCategories } from "../../lib/finance";
 import { CategoriesPage } from "../../ui/pages/categories-page";
 
 export default async function Page() {
   await connection();
   if ((await sessionView()).status === "anonymous") {
-    const names = [...new Set(mockTransactions.filter(transaction => transaction.kind === "expense").map(transactionCategory))];
-    const categories = names.filter(name => name !== "Sem categoria").map(name => ({
-      id: `demo:${categoryKeyForLabel(name)}`, code: categoryKeyForLabel(name), name, archived: false,
+    const categories = defaultCategories.map(([code, name]) => ({
+      id: `demo:${code}`, code, name, archived: false,
     }));
     return <CategoriesPage categories={categories} rules={[]} accounts={[]} live={false} />;
   }

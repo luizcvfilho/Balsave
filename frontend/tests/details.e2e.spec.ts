@@ -5,14 +5,14 @@ test("opens the dedicated receivables page and returns to the selected status", 
   page.on("pageerror", error => pageErrors.push(error));
   await page.goto("/lancamentos");
   await expect(page.getByRole("heading", { name: "Lançamentos", exact: true })).toBeVisible();
-  await page.getByRole("navigation", { name: "Navegação principal" }).getByRole("link", { name: "A receber" }).click();
+  await page.getByRole("navigation", { name: "Detalhes do extrato" }).getByRole("link", { name: "A receber" }).click();
   await expect(page.getByRole("heading", { name: "A receber", exact: true })).toBeVisible();
   await page.getByLabel("Status").selectOption("partial");
   const partialHotel = page.getByRole("listitem").filter({ has: page.getByText("Parcial", { exact: true }) })
     .getByRole("link", { name: "Hotel", exact: true });
   await expect(partialHotel).toHaveAttribute("href", /status=partial/);
   await partialHotel.click();
-  await expect(page.getByRole("heading", { name: "Detalhe do lançamento" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hotel", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Voltar para A receber" }).click();
   await expect(page).toHaveURL(/\/a-receber\?status=partial$/);
   await expect(page.getByLabel("Status")).toHaveValue("partial");
@@ -22,7 +22,7 @@ test("opens the dedicated receivables page and returns to the selected status", 
 test("opens the month and category from the dashboard and keeps the month on return", async ({ page }) => {
   await page.goto("/");
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
-  await categories.getByRole("combobox").selectOption("2026-10");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-10");
   const food = categories.getByRole("link", { name: /^Alimentação/ });
   await expect(food).toHaveAttribute("href", /mes=2026-10/);
   await food.click();
@@ -44,7 +44,7 @@ test("opens the month and category from the dashboard and keeps the month on ret
   await expect(purchases.getByRole("link")).toHaveCount(1);
   await expect(purchases.getByText("24/10/2026")).toBeVisible();
   await page.getByRole("link", { name: "Voltar ao painel" }).click();
-  await expect(categories.getByRole("combobox")).toHaveValue("2026-10");
+  await expect(page.getByLabel("Período", { exact: true })).toHaveValue("2026-10");
 });
 
 test("uses the selected pace day for daily purchases and the net category breakdown", async ({ page }) => {
@@ -95,7 +95,7 @@ test("includes only the installments dated in the selected calendar month", asyn
 test("shows upcoming installment estimates without adding them to recorded spending", async ({ page }) => {
   await page.goto("/");
   const categories = page.getByRole("region", { name: "Gastos por categoria" });
-  await categories.getByRole("combobox").selectOption("2026-12");
+  await page.getByLabel("Período", { exact: true }).selectOption("2026-12");
   const planned = categories.getByRole("link", { name: /^Parcelas previstas/ });
   await expect(planned).toContainText(/R\$\s*770,20/);
   await expect(categories.getByText("Nenhum gasto registrado neste mês.")).toBeVisible();
@@ -114,14 +114,19 @@ test("shows upcoming installment estimates without adding them to recorded spend
 
 test("shows an institution's accounts, date-filtered statement, and balance evolution", async ({ page }) => {
   await page.goto("/");
-  const evolution = page.getByRole("region", { name: "Evolução do saldo em contas" });
-  await expect(evolution.getByRole("slider")).toHaveAttribute("aria-valuetext", /^Fechamento em 31 de outubro de 2026/);
+  const evolution = page.getByRole("region", { name: "Saldo consolidado" });
+  await expect(evolution.getByText("+10,9%", { exact: false })).toBeVisible();
+  await expect(evolution.getByRole("button", { name: /^Saldo em 14 de novembro de 2026/ })).toHaveAttribute("aria-pressed", "true");
+  const october = evolution.getByRole("button", { name: /^Fechamento em 31 de outubro de 2026/ });
+  await october.click();
+  await expect(october).toHaveAttribute("aria-pressed", "true");
+  await expect(evolution.getByRole("link", { name: "Ver contas" })).toHaveAttribute("href", /ponto=2026-10/);
   await page.getByRole("region", { name: "Saldo em contas", exact: true }).getByRole("link", { name: "Itaú" }).click();
   await expect(page.getByLabel("Instituição")).toHaveValue("Itaú");
   await page.getByRole("link", { name: "Ver extrato de Itaú · Conta corrente" }).click();
   const statement = page.getByRole("table", { name: "Extrato da conta" });
   await expect(statement.getByRole("link", { name: "Pagamento de fatura" })).toBeVisible();
-  await expect(statement.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(168, 68, 63)");
+  await expect(statement.getByText(/-R\$\s*1\.600,00/)).toHaveCSS("color", "rgb(150, 63, 57)");
   await page.getByLabel("Movimentação").selectOption("in");
   await expect(statement.getByRole("link", { name: "Salário" })).toBeVisible();
   await expect(statement.getByRole("link", { name: "Reembolso do hotel" })).toBeVisible();
@@ -156,8 +161,9 @@ test("finds the demo event across three categories in the ledger", async ({ page
   const ledger = page.getByRole("table", { name: "Lançamentos filtrados" });
   await expect(ledger.getByRole("link")).toHaveCount(3);
   for (const category of ["Alimentação", "Lazer", "Transporte"]) {
-    await expect(ledger.getByRole("cell", { name: category, exact: true })).toBeVisible();
+    await expect(ledger.getByText(category, { exact: true })).toBeVisible();
   }
+  await page.getByText("Mais filtros", { exact: true }).click();
   await page.getByLabel("Categoria", { exact: true }).selectOption("leisure");
   await expect(ledger.getByRole("link")).toHaveCount(1);
   await ledger.getByRole("link", { name: "Cinema", exact: true }).click();
@@ -174,11 +180,36 @@ test("reports the hotel net expense in the purchase month and the credit in the 
   await expect(hotel).toHaveCount(0);
 
   await page.goto("/lancamentos?mes=2026-10");
-  await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(83, 102, 91)");
+  await expect(hotel.getByText(/-R\$\s*800,00/)).toHaveCSS("color", "rgb(89, 99, 94)");
   await page.goto("/lancamentos?mes=2026-11");
   const credit = page.getByRole("row").filter({ has: page.getByRole("link", { name: "Reembolso do hotel", exact: true }) });
   await expect(credit.getByText("11/11/2026")).toBeVisible();
   await expect(credit.getByText(/\+R\$\s*500,00/)).toBeVisible();
+});
+
+test("combines statement filters and clears an incompatible card when switching banks", async ({ page }) => {
+  await page.goto("/lancamentos?mes=2026-11");
+  const bank = page.getByLabel("Banco", { exact: true });
+  const card = page.getByLabel("Cartão", { exact: true });
+  const ledger = page.getByRole("table", { name: "Lançamentos filtrados" });
+  await bank.selectOption("Nubank");
+  await expect(card.getByRole("option")).toHaveText(["Todos os cartões", "Nubank · final 7032"]);
+  await card.selectOption("nubank-7032");
+  await expect(ledger.getByRole("link", { name: "Restaurante", exact: true })).toBeVisible();
+  await expect(ledger.getByRole("link", { name: "Supermercado", exact: true })).toHaveCount(0);
+  await page.getByLabel("Buscar lançamentos").fill("cinema");
+  await page.getByText("Mais filtros", { exact: true }).click();
+  await page.getByLabel("Categoria", { exact: true }).selectOption("leisure");
+  await expect(ledger.getByRole("link")).toHaveCount(1);
+  await ledger.getByRole("link", { name: "Cinema", exact: true }).click();
+  await page.getByRole("link", { name: "Voltar aos lançamentos" }).click();
+  await expect(bank).toHaveValue("Nubank");
+  await expect(card).toHaveValue("nubank-7032");
+  await expect(ledger.getByRole("link")).toHaveCount(1);
+  await bank.selectOption("Inter");
+  await expect(card).toBeDisabled();
+  await expect(card).toHaveValue("");
+  await expect(page).not.toHaveURL(/cartao=/);
 });
 
 test.describe("mobile detail flows", () => {
@@ -201,8 +232,8 @@ test.describe("mobile detail flows", () => {
 
   test("tracks refunds inside the ledger and saves receipt tags locally", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "Ver detalhes de Lançamentos recentes" }).tap();
-    await page.getByRole("link", { name: "Reembolsos", exact: true }).tap();
+    await page.getByRole("link", { name: "Ver extrato", exact: true }).tap();
+    await page.getByRole("link", { name: "A receber", exact: true }).tap();
     await page.getByLabel("Status").selectOption("pending");
     await expect(page.getByText("Nenhum valor recebido até o momento.")).toBeVisible();
     await page.getByLabel("Status").selectOption("completed");
@@ -219,13 +250,15 @@ test.describe("mobile detail flows", () => {
     await page.reload();
     await expect(page.getByLabel("Classificação", { exact: true })).toHaveValue("Viagem a trabalho");
     await expect(page.getByLabel("Tags", { exact: true })).toHaveValue("hotel, empresa");
-    await page.getByRole("link", { name: "Voltar aos reembolsos" }).tap();
-    await page.getByRole("link", { name: "Todos os lançamentos" }).tap();
+    await page.getByRole("link", { name: "Voltar para A receber" }).tap();
+    await page.getByRole("link", { name: "Lançamentos", exact: true }).tap();
     await page.getByLabel("Tipo").selectOption("refund");
     await page.getByLabel("Buscar lançamentos").fill("empresa");
     const ledger = page.getByRole("table", { name: "Lançamentos filtrados" });
     await expect(ledger.getByRole("link")).toHaveCount(1);
-    await expect(ledger.getByText("Viagem a trabalho · hotel · empresa")).toBeVisible();
+    for (const label of ["Viagem a trabalho", "hotel", "empresa"]) {
+      await expect(ledger.getByText(label, { exact: true })).toBeVisible();
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

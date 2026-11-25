@@ -2,3 +2,140 @@
 @import "tailwindcss";
 @import "../../../assets/balsave-theme.css" layer(base);
 @import "../components/details/report.css" layer(components);
+
+@layer components {
+  :root { --panel-padding: 23px 24px; }
+  .balsave-shell { width: min(100% - 96px, 1216px); margin-inline: auto; }
+  .balsave-page-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 20px;
+  }
+  .balsave-page-heading h1 {
+    font: 600 clamp(2.55rem, 4.1vw, 3.65rem)/1.08 "Playfair Display Variable", Georgia, serif;
+    letter-spacing: -.055em;
+    overflow-wrap: anywhere;
+  }
+  .balsave-page-heading p { margin-top: 9px; color: var(--muted); font-size: .9375rem; line-height: 1.5; }
+  .balsave-picker, .balsave-picker-search {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    min-width: 0;
+    border: 1px solid var(--control-line);
+    border-radius: 10px;
+    background: var(--background);
+    font-size: .875rem;
+    font-weight: 600;
+  }
+  .balsave-picker:hover, .balsave-picker-search:hover { background: var(--surface); }
+  .balsave-picker:focus-within, .balsave-picker-search:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
+  .balsave-picker select, .balsave-picker-search input {
+    min-width: 0;
+    min-height: 42px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+  }
+  .balsave-picker select:focus, .balsave-picker-search input:focus { outline: none; }
+  .balsave-picker select { appearance: none; padding: 0 30px 0 15px; text-overflow: ellipsis; }
+  .balsave-picker option { background: var(--background); }
+  .balsave-picker select:disabled { color: var(--muted); }
+  .balsave-picker::after {
+    content: "";
+    position: absolute;
+    inset-inline-end: 17px;
+    width: 6px;
+    height: 6px;
+    margin-block-start: -3px;
+    border: solid currentColor;
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+  .balsave-picker-period select { padding-inline-start: 44px; }
+  .balsave-picker svg, .balsave-picker-search svg { width: 17px; height: 17px; flex: none; }
+  .balsave-picker-period svg { position: absolute; inset-inline-start: 13px; pointer-events: none; }
+  .balsave-picker-search { padding-inline: 13px; }
+  .balsave-picker-search input::placeholder { color: var(--muted); }
+  .balsave-financial-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 58px;
+    margin-top: 22px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: .75rem;
+  }
+  .financial-panel-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    margin-block-start: -9px;
+    font-size: .8125rem;
+    white-space: nowrap;
+  }
+  .balsave-header { position: sticky; top: 0; z-index: 1100; background: var(--background); border-bottom: 1px solid var(--line); }
+  .balsave-header-inner { height: 72px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+  .balsave-brand { display: inline-flex; justify-self: start; align-items: center; min-height: 44px; }
+  .balsave-brand img { display: block; width: 139px; height: auto; }
+  .balsave-brand .balsave-logo-dark,
+  [data-theme="dark"] .balsave-brand .balsave-logo-light { display: none; }
+  [data-theme="dark"] .balsave-brand .balsave-logo-dark { display: block; }
+  .balsave-desktop-nav { align-self: stretch; display: flex; gap: 28px; }
+  .balsave-desktop-nav a { position: relative; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .875rem; font-weight: 600; text-decoration: none; }
+  .balsave-desktop-nav a:hover, .balsave-desktop-nav a[aria-current] { color: var(--ink); }
+  .balsave-desktop-nav a[aria-current]::after { content: ""; position: absolute; height: 2px; background: var(--green); inset: auto 0 -1px; border-radius: 2px; }
+  .balsave-nav-icon { display: block; width: 17px; height: 17px; }
+  .balsave-header-tools { display: flex; justify-content: flex-end; gap: 10px; }
+  .balsave-profile { position: relative; }
+  .balsave-avatar, .balsave-theme-toggle { width: 44px; height: 44px; display: grid; place-items: center; color: var(--ink); border: 1px solid var(--line); border-radius: 50%; background: var(--surface); cursor: pointer; list-style: none; }
+  .balsave-theme-toggle { border-radius: 12px; background: var(--background); }
+  .balsave-theme-sun,
+  [data-theme="dark"] .balsave-theme-moon { display: none; }
+  [data-theme="dark"] .balsave-theme-sun { display: block; }
+  .balsave-theme-toggle .balsave-nav-icon,
+  .balsave-avatar .balsave-nav-icon { width: 20px; height: 20px; }
+  .balsave-avatar::-webkit-details-marker { display: none; }
+  .balsave-avatar:hover, .balsave-theme-toggle:hover { border-color: var(--control-line); background: var(--surface); }
+  .balsave-profile-links { position: absolute; right: 0; top: calc(100% + 10px); min-width: 178px; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--background); box-shadow: var(--shadow); }
+  .balsave-profile-links a, .balsave-profile-links button { display: flex; align-items: center; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; text-decoration: none; font: inherit; font-size: .875rem; cursor: pointer; }
+  .balsave-profile-links a:hover, .balsave-profile-links button:hover { background: var(--surface); }
+  .balsave-mobile-nav { display: none; }
+  @media (max-width: 1040px) {
+    :root { --panel-padding: 20px 18px; }
+    .balsave-shell { width: calc(100% - 56px); }
+    .balsave-desktop-nav { gap: 19px; }
+  }
+  @media (max-width: 760px) {
+    :root { --panel-padding: 17px 15px; --radius-card: 15px; }
+    body { padding-bottom: calc(68px + env(safe-area-inset-bottom)); }
+    .balsave-shell { width: calc(100% - 36px); }
+    .balsave-header-inner { height: 62px; grid-template-columns: 1fr auto; }
+    .balsave-page-heading { align-items: flex-start; flex-direction: column; gap: 9px; }
+    .balsave-page-heading h1 { font-size: clamp(2.22rem, 8.4vw, 2.8rem); letter-spacing: -.05em; }
+    .balsave-page-heading p { margin-top: 6px; }
+    .balsave-picker-search input { font-size: 1rem; }
+    .balsave-desktop-nav { display: none; }
+    .balsave-mobile-nav { position: fixed; z-index: 1100; inset: auto 0 0; display: grid; grid-template-columns: repeat(4, 1fr); padding: 5px max(10px, env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); background: var(--background); border-top: 1px solid var(--line); }
+    .balsave-mobile-nav a { display: flex; min-width: 0; min-height: 52px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted); font-size: .67rem; font-weight: 650; text-align: center; text-decoration: none; }
+    .balsave-mobile-nav .balsave-nav-icon-wrap { display: grid; place-items: center; width: 42px; height: 27px; border-radius: 9px; }
+    .balsave-mobile-nav .balsave-nav-icon { width: 19px; height: 19px; }
+    .balsave-mobile-nav a[aria-current] { color: var(--ink); }
+    .balsave-mobile-nav a[aria-current] .balsave-nav-icon-wrap { color: var(--green); background: var(--green-soft); }
+  }
+  @media (max-width: 360px) {
+    .balsave-shell { width: calc(100% - 26px); }
+    .balsave-picker-compact { font-size: .8rem; }
+    .balsave-picker-compact select { padding-inline: 8px 24px; }
+    .balsave-picker-compact::after { inset-inline-end: 10px; }
+  }
+}

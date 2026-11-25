@@ -37,10 +37,14 @@ export async function FinancialPage({ children, showDemoWhenSignedOut = false, s
     const hasSavedReceivables = result.connected && showSavedReceivablesWhenUnavailable && Boolean(result.data.receivableGroups?.length);
     if (!result.connected || (!result.data.connectionCount && !hasSavedReceivables)) {
       return (
-        <main className="report-layout">
+        <main className="balsave-shell report-layout">
           <SectionCard id="conectar-bancos" title="Conecte seus bancos">
             <ConnectButton />
           </SectionCard>
+          <nav className="report-navigation" aria-label="Configurações dos relatórios">
+            <Link href="/conexoes">Conexões</Link>
+            <Link href="/categorias">Categorias e regras</Link>
+          </nav>
         </main>
       );
     }
@@ -50,7 +54,7 @@ export async function FinancialPage({ children, showDemoWhenSignedOut = false, s
   }
 
   return (
-    <main className="report-layout">
+    <main className="balsave-shell report-layout">
       <SectionCard id="dados-indisponiveis" title="Dados temporariamente indisponíveis">
         <p className="report-muted">Verifique a conexão com o Meu Pluggy e recarregue a página.</p>
         <Link className="report-link report-action" href="/conexoes">Gerenciar conexões</Link>

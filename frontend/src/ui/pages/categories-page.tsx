@@ -1,12 +1,10 @@
 "use client";
 
-import Chip from "@mui/material/Chip";
-import Container from "@mui/material/Container";
-import Typography from "@mui/material/Typography";
-import Link from "next/link";
 import { useState, useTransition } from "react";
 import { SectionCard } from "../../components/cards/section-card";
+import { FinancialFooter, PageHeading, ReportNavigation } from "../../components/details/report-layout";
 import { CategoryRuleEditor, ruleMatchLabels } from "../../components/details/category-rule-editor";
+import { CategoryChip } from "../../components/details/transaction-classification";
 import { useSessionViewKey } from "../../components/layout/session-view-provider";
 import { createCategory, updateCategory, updateCategoryRule } from "../../components/preview/category-actions";
 import type { CategoryAccountOption, CategoryRule, LocalCategory } from "../../data/financial-data";
@@ -24,14 +22,13 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
   const [pending, startTransition] = useTransition();
   const sorted = [...categories].sort((first, second) => Number(first.archived) - Number(second.archived) || first.name.localeCompare(second.name, "pt-BR"));
 
-  return <Container component="main" maxWidth="lg" className="report-layout">
-    <header className="report-header">
-      <Link href="/" className="report-link report-back">← Voltar ao painel</Link>
-      <div className="report-title">
-        <Typography variant="h1" color="primary.main">Categorias</Typography>
-        <Chip label={live ? "Suas categorias" : "Dados fictícios"} size="small" sx={{ bgcolor: "var(--surface-muted)", color: "var(--text-secondary)" }} />
-      </div>
-    </header>
+  return <main className="balsave-shell report-layout">
+    <PageHeading title="Categorias e regras" description="Veja como as transações são classificadas." />
+    <ReportNavigation label="Detalhes de gastos" options={[
+      { label: "Por categoria", href: "/gastos", active: false },
+      { label: "Ritmo de gastos", href: "/gastos?aba=ritmo", active: false },
+      { label: "Categorias e regras", href: "/categorias", active: true },
+    ]} />
     {!live && <p className="report-muted">A edição de categorias está disponível ao acessar seus dados. Os dados fictícios são apenas para consulta.</p>}
     <SectionCard id="criar-categoria" title="Criar categoria" description="Organize suas compras com categorias próprias.">
       <form action={() => startTransition(async () => {
@@ -51,8 +48,15 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
       <p className="report-muted" role={error ? "alert" : "status"}>{message}</p>
     </SectionCard>
     <SectionCard id="minhas-categorias" title="Minhas categorias" description="Arquivar preserva as compras anteriores e impede novas escolhas manuais. Classificações automáticas valem até a data do arquivamento. Renomear atualiza também os relatórios anteriores.">
-      {sorted.length ? <ul className="report-list">
-        {sorted.map(category => <CategoryItem key={category.id} category={category} live={live} />)}
+      {/* biome-ignore lint/a11y/noRedundantRoles: Safari can omit the list role when markers are hidden. */}
+      {sorted.length ? <ul role="list" className={live ? "report-list" : "report-list report-category-catalog"}>
+        {sorted.map(category => live ? (
+          <CategoryItem key={category.id} category={category} />
+        ) : (
+          <li key={category.id}>
+            <CategoryChip categoryKey={category.code ?? `custom:${category.id}`} categoryId={category.id} label={category.name} />
+          </li>
+        ))}
       </ul> : <p className="report-muted">Nenhuma categoria disponível.</p>}
     </SectionCard>
     <SectionCard id="criar-regra" title="Criar regra pessoal" description="Escolha os critérios e revise as compras afetadas antes de salvar. Alterar uma compra não cria regras automaticamente.">
@@ -63,10 +67,11 @@ export function CategoriesPage({ categories, rules, accounts, live }: {
         {[...rules].sort((first, second) => first.priority - second.priority).map(rule => <RuleItem key={rule.id} rule={rule} categories={categories} accounts={accounts} live={live} />)}
       </ul> : <p className="report-muted">Nenhuma regra criada.</p>}
     </SectionCard>
-  </Container>;
+    <FinancialFooter live={live} />
+  </main>;
 }
 
-function CategoryItem({ category, live }: { category: LocalCategory; live: boolean }) {
+function CategoryItem({ category }: { category: LocalCategory }) {
   const viewKey = useSessionViewKey();
   const [draftName, setDraftName] = useState<string>();
   const [message, setMessage] = useState("");
@@ -84,15 +89,18 @@ function CategoryItem({ category, live }: { category: LocalCategory; live: boole
   }
 
   return <li className="report-list-item">
-    <div className="report-group"><strong>{category.name}</strong><span className="report-muted">{category.archived ? "Arquivada" : category.code ? "Categoria inicial" : "Categoria personalizada"}</span></div>
+    <div className="report-group">
+      <CategoryChip categoryKey={category.code ?? `custom:${category.id}`} categoryId={category.id} label={category.name} />
+      <span className="report-muted">{category.archived ? "Arquivada" : category.code ? "Categoria inicial" : "Categoria personalizada"}</span>
+    </div>
     <form action={() => save({ name })}>
       <div className="report-filters">
         <label className="report-field report-search">
           <span>Nome de {category.name}</span>
-          <input value={name} required maxLength={80} disabled={!live || pending} onChange={event => { setDraftName(event.target.value); setMessage(""); }} />
+          <input value={name} required maxLength={80} disabled={pending} onChange={event => { setDraftName(event.target.value); setMessage(""); }} />
         </label>
-        <button className="report-button" type="submit" disabled={!live || pending || !name.trim() || name.trim() === category.name}>Salvar nome</button>
-        <button className="report-button" type="button" disabled={!live || pending} onClick={() => save({ archived: !category.archived })}>
+        <button className="report-button" type="submit" disabled={pending || !name.trim() || name.trim() === category.name}>Salvar nome</button>
+        <button className="report-button" type="button" disabled={pending} onClick={() => save({ archived: !category.archived })}>
           {category.archived ? "Reativar" : "Arquivar"}
         </button>
       </div>

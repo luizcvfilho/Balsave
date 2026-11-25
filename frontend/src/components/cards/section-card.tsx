@@ -10,27 +10,30 @@ type Props = {
   description?: string;
   action?: ReactNode;
   href?: string;
+  linkLabel?: string;
+  className?: string;
   linkSurface?: boolean;
   highlighted?: boolean;
+  flushContent?: boolean;
   children: ReactNode;
 };
 
-export function SectionCard({ id, title, description, action, href, linkSurface, highlighted = false, children }: Props) {
+export function SectionCard({ id, title, description, action, href, linkLabel, className, linkSurface, highlighted = false, flushContent = false, children }: Props) {
   const titleId = `${id}-title`;
 
   return (
     <Card
       component="section"
       id={id}
+      className={className}
       aria-labelledby={titleId}
       variant="outlined"
       sx={{
         minWidth: 0,
-        p: { xs: 2, sm: 2.5 },
+        p: flushContent ? 0 : "var(--panel-padding)",
         color: "var(--text-primary)",
-        bgcolor: highlighted ? "var(--surface-muted)" : "var(--surface)",
+        bgcolor: highlighted ? "var(--surface)" : "var(--background)",
         borderColor: "var(--border)",
-        borderTop: highlighted ? "3px solid var(--accent)" : undefined,
         borderRadius: "var(--radius-card)",
         backgroundImage: "none",
         ...(href && linkSurface && {
@@ -44,18 +47,30 @@ export function SectionCard({ id, title, description, action, href, linkSurface,
         direction="row"
         useFlexGap
         spacing={1}
-        sx={{ mb: 1, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}
+        className="financial-panel-heading"
+        sx={{
+          mb: flushContent ? 0 : 1,
+          p: flushContent ? "var(--panel-padding)" : undefined,
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+        }}
       >
         <div>
-          <Typography id={titleId} variant="h2" color="primary.main">{title}</Typography>
+          <Typography id={titleId} variant="h2" color="primary.main"
+            sx={{ fontSize: "1.0625rem", fontWeight: 660, letterSpacing: "-.025em" }}>{title}</Typography>
           {description && (
-            <Typography variant="body2" color="var(--text-secondary)" sx={{ mt: 0.5 }}>{description}</Typography>
+            <Typography variant="body2" color="var(--text-secondary)" sx={{ mt: 0.5, fontSize: ".8125rem" }}>{description}</Typography>
           )}
         </div>
         {(action || href) && (
           <Stack direction="row" useFlexGap spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
             {action}
-            {href && <Link className="card-detail-link report-link report-action" aria-label={`Ver detalhes de ${title}`} href={href}>Ver detalhes</Link>}
+            {href && (
+              <Link className="card-detail-link report-link financial-panel-link" aria-label={linkLabel ?? `Ver detalhes de ${title}`} href={href}>
+                {linkLabel ?? "Ver detalhes"} <span aria-hidden="true">→</span>
+              </Link>
+            )}
           </Stack>
         )}
       </Stack>

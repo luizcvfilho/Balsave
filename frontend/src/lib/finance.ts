@@ -143,13 +143,39 @@ export function transactionCategory(transaction: Transaction) {
   }
 }
 
-const defaultCategoryKeys: ReadonlyMap<string, string> = new Map([
-  ["Alimentação", "food"], ["Moradia", "housing"], ["Transporte", "transport"], ["Saúde", "health"],
-  ["Lazer", "leisure"], ["Viagem", "travel"], ["Compras", "shopping"], ["Educação", "education"],
-  ["Serviços", "services"], ["Serviços digitais", "subscriptions"], ["Seguros", "insurance"],
-  ["Impostos", "taxes"], ["Tarifas bancárias", "fees"], ["Doações", "donations"], ["Apostas", "gambling"],
-  ["Sem categoria", "uncategorized"],
-]);
+export const defaultCategories = [
+  ["food", "Alimentação"],
+  ["housing", "Moradia"],
+  ["transport", "Transporte"],
+  ["health", "Saúde"],
+  ["leisure", "Lazer"],
+  ["travel", "Viagem"],
+  ["shopping", "Compras"],
+  ["education", "Educação"],
+  ["services", "Serviços"],
+  ["subscriptions", "Serviços digitais"],
+  ["insurance", "Seguros"],
+  ["taxes", "Impostos"],
+  ["fees", "Tarifas bancárias"],
+  ["donations", "Doações"],
+  ["gambling", "Apostas"],
+  ["loans", "Empréstimos e financiamentos"],
+  ["legal", "Obrigações legais"],
+  ["transfers", "Transferências"],
+  ["income", "Receitas"],
+  ["investments", "Investimentos"],
+  ["pets", "Animais de estimação"],
+  ["review", "Categoria do Pluggy para revisar"],
+  ["uncategorized", "Sem categoria"],
+] as const;
+
+export type DefaultCategoryKey = typeof defaultCategories[number][0];
+
+// Preserve filter keys for older entries that carried a label without a category code.
+const legacyLabelCategories = new Set<DefaultCategoryKey>(["loans", "legal", "transfers", "income", "investments", "pets", "review"]);
+const defaultCategoryKeys = new Map<string, DefaultCategoryKey>(
+  defaultCategories.filter(([code]) => !legacyLabelCategories.has(code)).map(([code, name]) => [name, code]),
+);
 
 export function transactionCategoryKey(transaction: Transaction): string {
   if (transaction.kind === "expense") {

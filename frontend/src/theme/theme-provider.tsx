@@ -7,25 +7,25 @@ import type { ReactNode } from "react";
 const editorialFont = '"Playfair Display Variable", Georgia, serif';
 
 const theme = createTheme({
-  cssVariables: { colorSchemeSelector: "media" },
+  cssVariables: { colorSchemeSelector: '[data-theme="%s"]' },
   colorSchemes: {
     light: {
       palette: {
-        primary: { main: "#0D3B2E" },
-        secondary: { main: "#2E6B57" },
+        primary: { main: "#19201d" },
+        secondary: { main: "#246546" },
       },
     },
     dark: {
       palette: {
-        primary: { main: "#A7CEB6" },
-        secondary: { main: "#75B494" },
+        primary: { main: "#f4f5f4" },
+        secondary: { main: "#a6dbb9" },
       },
     },
   },
   typography: {
     fontFamily: '"Inter Variable", system-ui, sans-serif',
-    h1: { fontFamily: editorialFont, fontSize: "clamp(2rem, 5vw, 3.25rem)", lineHeight: 1.12, fontWeight: 600 },
-    h2: { fontFamily: editorialFont, fontSize: "clamp(1.25rem, 3vw, 1.5rem)", lineHeight: 1.25, fontWeight: 600 },
+    h1: { fontFamily: editorialFont, fontSize: "clamp(2.22rem, 4.1vw, 3.65rem)", lineHeight: 1.08, fontWeight: 600, letterSpacing: "-.055em" },
+    h2: { fontFamily: '"Inter Variable", system-ui, sans-serif', fontSize: "clamp(1.25rem, 3vw, 1.5rem)", lineHeight: 1.25, fontWeight: 600 },
   },
   components: {
     MuiCssBaseline: {
