@@ -74,9 +74,6 @@ Brand name: Balsave
 Tagline:
 "Controle, patrimônio e evolução."
 
-Visual direction:
-Terra Premium.
-
 Brand attributes:
 - Minimalist
 - Premium
@@ -86,9 +83,7 @@ Brand attributes:
 - Modern
 - Clear
 
-The logo pairs the Balsave wordmark with a circular symbol and three ascending columns. [Light logo](assets/balsave-logo-light.svg) · [Dark logo](assets/balsave-logo-dark.svg)
-
-Use a subtle terracotta accent.
+The logo pairs the Balsave wordmark with a monogram and ascending arrow. Use white and graphite surfaces with green accents for navigation, balance charts, and the transaction table. [Light logo](assets/balsave-logo-light.svg) · [Dark logo](assets/balsave-logo-dark.svg) · [Approved prototype](docs/design/balsave-identity/README.md)
 
 ## Theme Tokens
 

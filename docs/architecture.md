@@ -36,7 +36,7 @@ The development plan proposed storing BRL amounts as integer cents in PostgreSQL
 
 Expected amounts track what is owed. Actual receipts reduce net spending. Each allocated receipt first covers the payer selected for it, then any remainder covers outstanding shares on the same expense. Amounts above the total planned reimbursement are surplus and do not reduce the owner's share. Direct reimbursements with no plan can cover the entire expense. Cash flow keeps each original transaction amount and date.
 
-“Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Painel financeiro” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
+“Lançamentos” applies the period and other active filters before totaling the displayed amounts. “Visão geral” and “Gastos por categoria” use the same tag matching for spending, including the daily pace, and retain their net spending calculation. Selecting multiple tags matches any selected tag and counts each transaction once. Projected installments are excluded while a tag filter is active.
 
 ## Starting history
 
