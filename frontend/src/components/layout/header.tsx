@@ -14,6 +14,7 @@ const sections = [
   { href: "/gastos", label: "Gastos", mobile: "Gastos", routes: ["/gastos"], icon: "spending" },
   { href: "/classificacoes", label: "Classificações", mobile: "Classificações", routes: ["/classificacoes", "/categorias", "/etiquetas"], icon: "classifications" },
   { href: "/contas", label: "Contas", mobile: "Contas", routes: ["/contas", "/cartoes", "/conexoes"], icon: "accounts" },
+  { href: "/simulador", label: "Simulador", mobile: "Simular", routes: ["/simulador"], icon: "calculator" },
 ] as const;
 
 function Icon({ name }: { name: string }) {
@@ -23,6 +24,7 @@ function Icon({ name }: { name: string }) {
     spending: <><path d="M12 3v9h9A9 9 0 1 1 12 3Z" /><path d="M15 3.55A8 8 0 0 1 20.45 9H15z" /></>,
     classifications: <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />,
     accounts: <path d="m3 9 9-5 9 5v2H3zm0 11h18M6 11v6m4-6v6m4-6v6m4-6v6" />,
+    calculator: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8m-8 5h1m6 0h1m-8 4h1m6 0h1" /></>,
     profile: <><circle cx="12" cy="8" r="3.2" /><path d="M5.5 20v-1.7a6.5 5 0 0 1 13 0V20" /></>,
     moon: <path d="M20.8 14A8.9 8.9 0 0 1 10 3.2 9 9 0 1 0 20.8 14Z" />,
     sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" /></>,

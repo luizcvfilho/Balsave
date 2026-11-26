@@ -473,6 +473,16 @@ def load_investments(item_id: UUID, api_key: str, as_of: str, bank_accounts: lis
             "balanceCents": balance, "asOf": reference_date or as_of,
             "_code": tax_document(raw.get("code")), "_itemId": str(item_id), "_usableStatement": True,
         }
+        investment_type = raw.get("type")
+        is_fund = investment_type in ("MUTUAL_FUND", "ETF") or (
+            investment_type == "EQUITY" and raw.get("subtype") == "REAL_ESTATE_FUND"
+        )
+        if is_fund and raw.get("status") not in ("PENDING", "TOTAL_WITHDRAWAL"):
+            rate = cents(raw.get("lastTwelveMonthsRate")) if reference_date and reference_date <= as_of else None
+            position["fund"] = {
+                # Pluggy expresses historical performance in percentage points.
+                "lastTwelveMonthsRateBps": rate,
+            }
         position_entries = {}
         try:
             for movement in pluggy.investment_transactions(investment_id, api_key):

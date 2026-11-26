@@ -7,7 +7,11 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   balanceCents: number | null;
 };
 
-export type ReportInvestment = ReportAccount & { asOf: string; includedInAccountId?: string };
+export type ReportInvestment = ReportAccount & {
+  asOf: string;
+  includedInAccountId?: string;
+  fund?: { lastTwelveMonthsRateBps: number | null };
+};
 export type ReconciliationCandidate = { entryId: string; counterpartId: string | null };
 
 export type LocalCategory = { id: string; code: string | null; name: string; archived: boolean; archivedAt?: string | null };

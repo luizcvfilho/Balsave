@@ -28,13 +28,15 @@ async function backendRequest(path: string, method: "GET" | "POST", options: {
   sessionId?: string;
   payload?: object;
   clientIp?: string | null;
+  allowDemo?: boolean;
 } = {}) {
   const secret = process.env.BALSAVE_AUTH_SECRET ?? "";
-  if (Buffer.byteLength(secret) < 32) return;
+  if (Buffer.byteLength(secret) < 32 && (secret || !options.allowDemo)) return;
 
   const origin = process.env.BALSAVE_BACKEND_URL ?? "http://127.0.0.1:8000";
   try {
-    const requestHeaders = new Headers({ "X-Balsave-Internal": secret });
+    const requestHeaders = new Headers();
+    if (secret) requestHeaders.set("X-Balsave-Internal", secret);
     if (options.sessionId) requestHeaders.set("Authorization", `Bearer ${options.sessionId}`);
     if (options.payload) requestHeaders.set("Content-Type", "application/json");
     if (options.clientIp) requestHeaders.set("X-Balsave-Client-IP", options.clientIp);
@@ -68,6 +70,16 @@ export const sessionView = cache(async (): Promise<SessionView> => {
   if (sessionId) return { status: "active", viewKey: sessionViewKey(sessionId) };
   return { status: sessionId === null ? "anonymous" : "unavailable", viewKey: null };
 });
+
+export async function simulatorRequest(payload: object) {
+  if (!process.env.BALSAVE_AUTH_SECRET) return backendRequest("simulator", "POST", { payload, allowDemo: true });
+  if (!authEnabled()) return;
+  if (!await hasTrustedOrigin()) return new Response(null, { status: 403 });
+  const sessionId = await currentSessionId();
+  if (sessionId === undefined) return;
+  if (!sessionId) return new Response(null, { status: 401 });
+  return backendRequest("simulator", "POST", { sessionId, payload });
+}
 
 export async function sendCredentials(mode: "login" | "register", credentials: {
   email: string;
