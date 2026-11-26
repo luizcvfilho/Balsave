@@ -91,6 +91,14 @@ In the demo, “Extrato” → “A receber” shows pending, partial, and compl
 
 With a Meu Pluggy connection, open an imported expense in “Lançamentos” and select “Definir valores a receber”. Enter the payers and amounts, or use “Dividir igualmente” to split the expense and optionally include your own share. From “Extrato” → “A receber”, open the expense to link a posted credit and choose how much of the credit to use. You can also start from the credit using “Vincular a uma despesa”, including when no amount was planned. The spending reports use confirmed receipts to update the original month's net expense. Account statements keep the original transaction amounts and dates.
 
+## Compare purchase options
+
+Open “Simulador” on desktop or “Simular” in the mobile navigation. Both strategies start with the same cash. “Saldo total” defaults to the consolidated bank balance when complete and usable. Select an individual bank balance or “Informar valor” to enter a custom amount. A blank manual entry uses the cash price. The purchase date is today in `America/Sao_Paulo`. If “Vencimento da primeira parcela” is blank, the simulation starts installments on the fifth day of the next month. Monthly installments keep the original due day and use the month's final day when it is shorter. Each scenario reports its nominal cost, invested balance at the final due date, and any extra cash needed at payment time.
+
+“Fundo de investimento” lists funds from the user's synchronized positions or the demo. Selecting a fund with trailing 12-month performance in the supported range automatically fills “Rendimento anual da simulação (%)” using that historical rate as an estimate. The position date appears alongside the rate. Edit the estimate to reflect applicable taxes and fees. Open Finance connectors omit the historical rate and require a manual estimate. [Pluggy investment fields](https://docs.pluggy.ai/en/docs/products/investments)
+
+The assumed net annual yield compounds over actual calendar days with a 365-day year. The calculation preserves decimal precision until rounding displayed monetary amounts to the nearest cent, with half-cent ties rounded away from zero. The final advantage accounts for the value that extra cash would have earned through the last due date. The simulator reports a unique break-even rate within the supported interval of −99.99% to 100% and distinguishes equal same-day costs, impossible break-even, and rates outside the interval. The simulator uses the FastAPI service in demo and authenticated modes and stores no simulation inputs or results.
+
 ## Database migrations
 
 `make dev` and `make up` wait for PostgreSQL to become ready and apply Alembic migrations before starting Next.js and FastAPI. The `migrate` service uses the `postgres` role to make schema changes. FastAPI uses the `balsave_app` role. Better Auth uses the separate `balsave_identity` role, with permissions limited to its own schema.

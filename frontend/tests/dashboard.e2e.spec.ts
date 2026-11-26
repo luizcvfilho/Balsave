@@ -59,7 +59,7 @@ test("shows shared navigation and updates spending charts independently", async 
   const header = page.getByRole("banner");
   await expect(header.getByRole("link", { name: "Balsave, visão geral" })).toHaveAttribute("href", "/");
   const nav = header.getByRole("navigation", { name: "Navegação principal" });
-  await expect(nav.getByRole("link")).toHaveText(["Visão geral", "Extrato", "Gastos", "Classificações", "Contas"]);
+  await expect(nav.getByRole("link")).toHaveText(["Visão geral", "Extrato", "Gastos", "Classificações", "Contas", "Simulador"]);
   await expect(nav.getByRole("link", { name: "Visão geral", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "Lançamentos recentes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Reembolsos", exact: true })).toHaveCount(0);
@@ -115,7 +115,7 @@ test.describe("mobile layout", () => {
     expect(profile?.x).toBeGreaterThan((logo?.x ?? 0) + (logo?.width ?? 0));
     expect(profile?.height).toBeGreaterThanOrEqual(44);
     const nav = page.getByRole("navigation", { name: "Navegação principal" });
-    await expect(nav.getByRole("link")).toHaveText(["Início", "Extrato", "Gastos", "Classificações", "Contas"]);
+    await expect(nav.getByRole("link")).toHaveText(["Início", "Extrato", "Gastos", "Classificações", "Contas", "Simular"]);
     const accounts = page.getByRole("region", { name: "Saldo em contas", exact: true });
     const cards = page.getByRole("region", { name: "Limite usado nos cartões" });
     await expect(accounts).toBeVisible();

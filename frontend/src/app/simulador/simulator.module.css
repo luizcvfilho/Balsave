@@ -1,0 +1,68 @@
+.layout,
+.results {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+.fields {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block: 15px;
+  min-width: 0;
+}
+
+.fields label,
+.source {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  font-size: .86rem;
+  font-weight: 600;
+}
+
+.fields input,
+.fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--control-line);
+  border-radius: 10px;
+  padding-inline: 10px;
+  background: var(--background);
+  color: var(--ink);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fields small {
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 400;
+}
+
+.rate { grid-column: 1 / -1; }
+.rate input { max-width: 12rem; }
+
+.outcome {
+  color: var(--ink);
+  font-size: 1.18rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+}
+
+.figures { display: grid; gap: 10px; margin-top: 14px; }
+.figures dt { color: var(--muted); font-size: .84rem; }
+.figures dd { font-weight: 650; font-variant-numeric: tabular-nums; }
+.error { color: var(--negative); font-size: .875rem; margin-top: 12px; }
+.error a { text-decoration: underline; }
+
+@media (min-width: 1024px) {
+  .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+}
+
+@media (max-width: 420px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+}

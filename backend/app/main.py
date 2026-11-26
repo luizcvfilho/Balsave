@@ -1,7 +1,7 @@
 import psycopg
 from fastapi import FastAPI, HTTPException
 
-from app import auth, category_api, category_rule_api, database, pluggy_preview, receivable_api, tag_api
+from app import auth, category_api, category_rule_api, database, pluggy_preview, receivable_api, simulator_api, tag_api
 
 app = FastAPI(
     title="Balsave API",
@@ -15,6 +15,7 @@ app.include_router(category_api.router)
 app.include_router(category_rule_api.router)
 app.include_router(tag_api.router)
 app.include_router(receivable_api.router)
+app.include_router(simulator_api.router)
 
 
 @app.get("/api/health", include_in_schema=False)

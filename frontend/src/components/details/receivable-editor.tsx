@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Transaction } from "../../lib/finance";
-import { formatDate, formatMoney } from "../../lib/format";
+import { formatDate, formatMoney, parseAmount } from "../../lib/format";
 import { useSessionViewKey } from "../layout/session-view-provider";
 import { saveReceivableLink, saveReceivablePlan } from "../preview/receivable-actions";
 
@@ -11,13 +11,6 @@ type Draft = { id: string; name: string; amount: string };
 
 function amountText(cents: number) {
   return `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, "0")}`;
-}
-
-function parseAmount(value: string) {
-  const match = /^(\d+)(?:[,.](\d{1,2}))?$/.exec(value.trim());
-  if (!match) return undefined;
-  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
-  return Number.isSafeInteger(cents) ? cents : undefined;
 }
 
 export function eligibleTransaction(transaction: Transaction) {

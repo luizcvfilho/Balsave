@@ -33,6 +33,12 @@ export const formatMoney = (cents: number) => currency.format(cents / 100);
 export const formatAvailableMoney = (cents: number | null) => cents === null ? "Indisponível" : formatMoney(cents);
 export const formatSignedMoney = (cents: number) => signedCurrency.format(cents / 100);
 export const formatPercent = (share: number) => percent.format(share);
+export function parseAmount(value: string) {
+  const match = /^(\d+)(?:[,.](\d{1,2}))?$/.exec(value.trim());
+  if (!match) return undefined;
+  const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+  return Number.isSafeInteger(cents) ? cents : undefined;
+}
 export function formatCompactMoney(cents: number) {
   // Use explicit scales because compact currency notation differs across ICU versions.
   const unit = compactUnits.find(({ cents: threshold }) => Math.abs(cents) >= threshold);

@@ -5,7 +5,7 @@ from unittest.mock import patch
 from uuid import UUID
 
 from app import pluggy
-from app.financial_snapshot import institution_names, load_item, load_snapshot, normalize_card, normalize_transaction
+from app.financial_snapshot import institution_names, load_investments, load_item, load_snapshot, normalize_card, normalize_transaction
 
 
 ACCOUNT = "2f5fb14d-49a8-43db-955c-580165f7ea4e"
@@ -370,6 +370,7 @@ class FinancialSnapshotTests(TestCase):
         position = {
             "id": investment_id, "itemId": ACCOUNT, "currencyCode": "BRL", "name": "Unrelated fund name",
             "balance": 900, "date": "2026-11-14", "code": "12.345.678/0001-95", "type": "MUTUAL_FUND",
+            "lastTwelveMonthsRate": Decimal("8.755"), "annualRate": Decimal("9.42"),
         }
         bank_entries = [
             {**self.entry, "id": str(UUID(int=11)), "date": "2026-10-01", "amount": 10, "type": "CREDIT"},
@@ -393,12 +394,33 @@ class FinancialSnapshotTests(TestCase):
             snapshot = load_snapshot((UUID(ACCOUNT),), "test")
             included = load_snapshot((UUID(ACCOUNT),), "test", position_links={investment_id: ACCOUNT})
         self.assertEqual(snapshot["investments"][0]["balanceCents"], 90000)
+        self.assertEqual(snapshot["investments"][0]["fund"], {"lastTwelveMonthsRateBps": 876})
         self.assertEqual(sum(point["balanceCents"] for point in snapshot["balanceSnapshots"][0]["accounts"]), 200200)
         matched = [entry for entry in snapshot["transactions"] if entry.get("reconciliation") == "automatic"]
         self.assertEqual(len(matched), 2)
         self.assertEqual(sum(entry["balanceImpactCents"] for entry in matched), -200)
         self.assertEqual(included["balanceSnapshots"][0]["accounts"], [{"id": ACCOUNT, "bank": "Meu Pluggy · conexão 1", "balanceCents": 110200}])
         self.assertTrue(all(not any(key.startswith("_") for key in entry) for entry in snapshot["transactions"]))
+
+    def test_fund_selection_respects_provider_type_status_and_availability(self):
+        position = {"itemId": ACCOUNT, "currencyCode": "BRL", "balance": 900, "date": "2026-11-14"}
+        variations = [
+            {"type": "MUTUAL_FUND", "annualRate": 9, "lastTwelveMonthsRate": None},
+            {"type": "EQUITY", "subtype": "REAL_ESTATE_FUND", "lastTwelveMonthsRate": 0},
+            {"type": "ETF", "date": "2026-11-15", "lastTwelveMonthsRate": 8},
+            {"type": "MUTUAL_FUND", "status": "TOTAL_WITHDRAWAL", "lastTwelveMonthsRate": 8},
+            {"type": "FIXED_INCOME", "fixedAnnualRate": 8},
+        ]
+        raw = [{**position, **fields, "id": str(UUID(int=index))} for index, fields in enumerate(variations, start=1)]
+        with (
+            patch.object(pluggy, "investments", return_value=raw),
+            patch.object(pluggy, "investment_transactions", return_value=[]),
+        ):
+            positions, _ = load_investments(UUID(ACCOUNT), "test", "2026-11-14", [], "Mock Bank")
+        self.assertEqual([position.get("fund") for position in positions], [
+            {"lastTwelveMonthsRateBps": None}, {"lastTwelveMonthsRateBps": 0},
+            {"lastTwelveMonthsRateBps": None}, None, None,
+        ])
 
     def load_accounts(self, *transfer_numbers):
         records = [
