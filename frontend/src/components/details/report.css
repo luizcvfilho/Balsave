@@ -283,6 +283,16 @@
   align-items: center;
 }
 
+.report-reconciliation > summary {
+  align-content: center;
+  width: fit-content;
+  min-height: 44px;
+  color: var(--primary);
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .report-choice {
   display: flex;
   justify-content: space-between;

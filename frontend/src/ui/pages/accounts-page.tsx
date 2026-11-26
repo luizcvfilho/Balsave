@@ -4,10 +4,10 @@ import Link from "next/link";
 import { BreakdownList } from "../../components/cards/breakdown-list";
 import { SectionCard } from "../../components/cards/section-card";
 import { LineChart } from "../../components/charts/line-chart";
+import { InvestmentDetail } from "../../components/details/investment-detail";
 import { PeriodFields, ReportMultiSelect, ReportSelect, usePeriod } from "../../components/details/report-filters";
 import { ReportLayout, ReportNavigation } from "../../components/details/report-layout";
 import { ReportMetrics } from "../../components/details/report-metrics";
-import { Reconciliation } from "../../components/details/reconciliation";
 import { useReportQuery } from "../../components/details/report-query";
 import { orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { accountBalances, type ReportAccount } from "../../data/financial-data";
@@ -26,27 +26,39 @@ export function AccountsPage() {
   const { accounts, investments } = useFinancialReports();
   const bankOptions = [...new Set([...accounts, ...investments].map(account => account.bank))]
     .map(bank => ({ value: bank, label: bank }));
+  const dashboardMonth = params.get("painelMes");
+  const investmentId = params.get("investimento");
   const evolution = params.get("aba") === "evolucao";
-  const reconciliation = params.get("aba") === "conciliacao";
   const banks = optionValues(params, "banco", bankOptions);
   const account = accounts.find(account => account.id === params.get("conta") && (!banks.size || banks.has(account.bank)));
 
+  if (investmentId) {
+    const investment = investments.find(position => position.id === investmentId);
+    return (
+      <ReportLayout title={investment?.name ?? "Investimento indisponível"} dashboardMonth={dashboardMonth}
+        back={{ href: href({ investimento: undefined, aba: undefined }), label: "Voltar às contas" }}>
+        {investment ? <InvestmentDetail key={investment.id} investment={investment} /> : (
+          <p className="report-muted">Volte às contas para selecionar outro investimento.</p>
+        )}
+      </ReportLayout>
+    );
+  }
+
   return (
-    <ReportLayout title={reconciliation ? "Conciliação" : evolution ? "Evolução do saldo" : "Contas"}
-      description="Veja seus saldos, investimentos e movimentações." dashboardMonth={params.get("painelMes")}
-      controls={!reconciliation && <ReportMultiSelect label="Instituição" placeholder="Todas as instituições" selectionLabel="Instituições"
+    <ReportLayout title={evolution ? "Evolução do saldo" : "Contas"}
+      description="Veja seus saldos, investimentos e movimentações." dashboardMonth={dashboardMonth}
+      controls={<ReportMultiSelect label="Instituição" placeholder="Todas as instituições" selectionLabel="Instituições"
         selected={banks} options={bankOptions} onChange={values => update({
           banco: values,
           conta: account && (!values.length || values.includes(account.bank)) ? account.id : undefined,
         })} />}>
       <ReportNavigation label="Detalhes de contas" options={[
-        { label: "Contas", href: href({ aba: undefined }), active: !evolution && !reconciliation },
+        { label: "Contas", href: href({ aba: undefined }), active: !evolution },
         { label: "Evolução", href: href({ aba: "evolucao" }), active: evolution },
-        { label: "Conciliação", href: href({ aba: "conciliacao" }), active: reconciliation },
-        { label: "Cartões", href: reportHref("/cartoes", { painelMes: params.get("painelMes") ?? undefined }), active: false },
+        { label: "Cartões", href: reportHref("/cartoes", { painelMes: dashboardMonth ?? undefined }), active: false },
         { label: "Conexões", href: "/conexoes", active: false },
       ]} />
-      {reconciliation ? <Reconciliation /> : evolution ? <BalanceEvolution banks={banks} /> : (
+      {evolution ? <BalanceEvolution banks={banks} /> : (
         <>
           <div className="report-columns">
             <AccountBalances banks={banks} activeAccount={account?.id} />
@@ -60,6 +72,7 @@ export function AccountsPage() {
 }
 
 function InvestmentBalances({ banks }: { banks: ReadonlySet<string> }) {
+  const { href } = useReportQuery();
   const { investments, positions, failedInvestments } = useFinancialReports();
   const visible = investments.filter(position => !banks.size || banks.has(position.bank));
   if (!investments.length && !failedInvestments) return <SectionCard id="saldos-investimentos" title="Investimentos" highlighted>
@@ -71,8 +84,11 @@ function InvestmentBalances({ banks }: { banks: ReadonlySet<string> }) {
     <ReportMetrics items={[{ label: "Saldo consolidado acompanhado", value: tracked.every(position => position.balanceCents !== null)
       ? formatMoney(tracked.reduce((sum, position) => sum + (position.balanceCents ?? 0), 0)) : "Indisponível" }]} />
     {failedInvestments ? <p className="report-muted" role="status">Parte dos investimentos está indisponível. O total pode estar incompleto.</p> : null}
-    <BreakdownList rows={visible.map(position => ({ key: position.id, label: position.name, value: formatAvailableMoney(position.balanceCents) }))} />
-    <Link className="report-link report-action" href="/contas?aba=conciliacao">Revisar composição e transferências</Link>
+    <BreakdownList rows={visible.map(position => ({
+      key: position.id,
+      label: <Link className="report-link report-action" href={href({ investimento: position.id, aba: undefined })}>{position.name}</Link>,
+      value: formatAvailableMoney(position.balanceCents),
+    }))} />
   </SectionCard>;
 }
 

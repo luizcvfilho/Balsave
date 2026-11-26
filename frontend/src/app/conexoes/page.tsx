@@ -16,7 +16,6 @@ export default async function Page() {
       <ReportNavigation label="Detalhes de contas" options={[
         { label: "Contas", href: "/contas", active: false },
         { label: "Evolução", href: "/contas?aba=evolucao", active: false },
-        { label: "Conciliação", href: "/contas?aba=conciliacao", active: false },
         { label: "Cartões", href: "/cartoes", active: false },
         { label: "Conexões", href: "/conexoes", active: true },
       ]} />

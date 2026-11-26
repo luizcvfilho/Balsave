@@ -40,7 +40,6 @@ export function CardsPage() {
       <ReportNavigation label="Detalhes de contas" options={[
         { label: "Contas", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined }), active: false },
         { label: "Evolução", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined, aba: "evolucao" }), active: false },
-        { label: "Conciliação", href: reportHref("/contas", { painelMes: dashboardMonth ?? undefined, aba: "conciliacao" }), active: false },
         { label: "Cartões", href: href({}), active: true },
         { label: "Conexões", href: "/conexoes", active: false },
       ]} />

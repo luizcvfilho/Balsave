@@ -15,6 +15,7 @@ import { TagEditor } from "../../components/details/tag-editor";
 import { TagFilter, useTagFilter } from "../../components/details/tag-filter";
 import { CategoryChip, TagChip } from "../../components/details/transaction-classification";
 import { kindOptions, orderOptions, useCategoryOptions } from "../../components/details/transaction-filters";
+import { TransactionReconciliation } from "../../components/details/transaction-reconciliation";
 import { InstitutionLabel, orderedTransactions, TransactionTable } from "../../components/details/transaction-table";
 import { cardLabel } from "../../data/financial-data";
 import { useFinancialReports } from "../../data/financial-reports";
@@ -201,6 +202,7 @@ function TransactionDetail({ transaction }: { transaction: Transaction }) {
             {transaction.tags.map(tag => <TagChip key={tag} id={tag} label={tag} />)}
           </span> }] : []),
         ]} />
+        <TransactionReconciliation transaction={transaction} />
       </SectionCard>
       {transaction.kind === "expense" && <CategoryEditor transaction={transaction} />}
       {live && <ReceivableDetail transaction={transaction} />}
