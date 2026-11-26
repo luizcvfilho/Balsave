@@ -13,6 +13,21 @@ const legacyHash = `scrypt-v1$${salt.toString("hex")}$${key.toString("hex")}`;
 let connectedOwner;
 const accountId = "10000000-0000-0000-0000-000000000001";
 const transactionId = `${accountId}.20000000-0000-0000-0000-000000000001`;
+const investmentId = "10000000-0000-0000-0000-000000000002";
+const bankMovementId = `${accountId}.20000000-0000-0000-0000-000000000007`;
+const fundMovementId = `${investmentId}.20000000-0000-0000-0000-000000000008`;
+const automaticInvestmentId = `${accountId}.20000000-0000-0000-0000-000000000009`;
+const reconciliationEntries = [
+  { id: bankMovementId, accountId, name: "Envio para o fundo", date: "2026-11-13", direction: "out", amountCents: 25000 },
+  { id: fundMovementId, investmentId, name: "Aplicação no fundo", date: "2026-11-14", direction: "in", amountCents: 25000 },
+  { id: automaticInvestmentId, accountId, name: "Resgate automático pendente", date: "2026-11-16", direction: "in", amountCents: 10000 },
+  { id: `${accountId}.20000000-0000-0000-0000-000000000010`, accountId, name: "Aplicação reconhecida", date: "2026-11-17",
+    direction: "out", amountCents: 10000, reconciliation: "automatic" },
+];
+const reconciliationCandidates = [
+  { entryId: bankMovementId, counterpartId: fundMovementId },
+  { entryId: automaticInvestmentId, counterpartId: null },
+];
 const receivableEntries = [
   [2, "Jantar dividido", "2026-10-30", "expense", 10000],
   [3, "Pix da Ana", "2026-11-10", "income", 4000],
@@ -38,6 +53,9 @@ let assignmentConflict;
 let receivableGroups;
 let receivablesEnabled;
 let missingCredit;
+let reconciliationEnabled;
+let includedInAccountId;
+let confirmedMovements;
 
 async function reset() {
   const connection = await pool.connect();
@@ -74,6 +92,9 @@ async function reset() {
   receivableGroups = [];
   receivablesEnabled = false;
   missingCredit = false;
+  reconciliationEnabled = false;
+  includedInAccountId = undefined;
+  confirmedMovements = new Map();
 }
 await reset();
 
@@ -90,11 +111,18 @@ function ruleMatches(rule) {
 function snapshot() {
   const rule = [...rules].sort((first, second) => first.priority - second.priority).find(item => ruleMatches(item));
   const category = assignment === null ? null : categories.find(item => item.id === (assignment ?? rule?.categoryId)) ?? categories[1];
+  const movements = reconciliationEnabled ? reconciliationEntries.map(entry => ({
+    ...entry, kind: "transfer", internalTransfer: "investment",
+    ...(confirmedMovements.has(entry.id) && { reconciliation: "confirmed", counterpartId: confirmedMovements.get(entry.id) }),
+  })) : [];
   return {
     connected: true,
     data: {
       asOf: "2026-11-20",
       accounts: [{ id: accountId, name: "Conta de teste", bank: "Banco fictício", balanceCents: 150000 }],
+      investments: reconciliationEnabled ? [{ id: investmentId, name: "Fundo de teste", bank: "Banco fictício", balanceCents: 40000,
+        asOf: "2026-11-19", includedInAccountId }] : [],
+      reconciliationCandidates: reconciliationEnabled ? reconciliationCandidates.filter(candidate => !confirmedMovements.has(candidate.entryId)) : [],
       cards: [],
       transactions: [{
         id: transactionId, accountId, name: "Loja de equipamentos", date: "2026-11-15", kind: "expense", amountCents: 12500,
@@ -102,7 +130,7 @@ function snapshot() {
         categoryKey: category ? category.code ?? `custom:${category.id}` : "uncategorized",
         categorySource: assignment !== undefined ? "manual" : rule ? "rule" : "pluggy", providerCategoryId: "08020000", providerCategoryName: "Electronics",
         providerCategoryLabel: "Eletrônicos", categoryNeedsReview: false, tagIds: transactionTags,
-      }, ...receivablesEnabled ? receivableEntries.filter(entry => !missingCredit || entry !== receivableEntries[2]) : []],
+      }, ...receivablesEnabled ? receivableEntries.filter(entry => !missingCredit || entry !== receivableEntries[2]) : [], ...movements],
       receivableGroups,
       categories,
       tags,
@@ -157,6 +185,7 @@ createServer(async (request, response) => {
     if (body.receivablesEnabled !== undefined) receivablesEnabled = body.receivablesEnabled;
     if (body.missingCredit !== undefined) missingCredit = body.missingCredit;
     if (body.assignment !== undefined) assignment = body.assignment;
+    if (body.reconciliationEnabled !== undefined) reconciliationEnabled = body.reconciliationEnabled;
     return respond(response, 200, { saved: true });
   }
   if (request.headers["x-balsave-internal"] !== internalSecret) return respond(response, 403, { detail: "Internal access required" });
@@ -182,6 +211,27 @@ createServer(async (request, response) => {
   }
   if (path === "snapshot" && request.method === "GET") {
     return snapshotUnavailable ? respond(response, 503, { detail: "Provider unavailable" }) : respond(response, 200, snapshot());
+  }
+  if (path === "position-links" && request.method === "POST" && reconciliationEnabled) {
+    if (body.investmentId !== investmentId || ![null, accountId].includes(body.accountId)) {
+      return respond(response, 404, { detail: "Position unavailable" });
+    }
+    includedInAccountId = body.accountId ?? undefined;
+    return respond(response, 200, { saved: true });
+  }
+  if (path === "reconciliation" && request.method === "POST" && reconciliationEnabled) {
+    const { entryId, counterpartId, remove } = body;
+    if (remove && confirmedMovements.has(entryId)) {
+      confirmedMovements.delete(confirmedMovements.get(entryId));
+      confirmedMovements.delete(entryId);
+      return respond(response, 200, { saved: true });
+    }
+    if (!remove && reconciliationCandidates.some(candidate => candidate.entryId === entryId && candidate.counterpartId === counterpartId)) {
+      confirmedMovements.set(entryId, counterpartId);
+      if (counterpartId) confirmedMovements.set(counterpartId, entryId);
+      return respond(response, 200, { saved: true });
+    }
+    return respond(response, 409, { detail: "Candidate unavailable" });
   }
   if (path === "categories" && request.method === "GET") return respond(response, 200, {
     categories, categoryRules: rules, categoryAccounts: [{ id: accountId, label: "Banco fictício · Conta de teste" }],
