@@ -74,18 +74,25 @@ function buildReports(data: FinancialData, live: boolean) {
     const latestClosed = snapshots.at(-1);
     // Use the same accounts for the entire series so changes reflect movements within a fixed set.
     const comparable = new Set(latestClosed?.accounts.map(account => account.id));
+    const lastUnmatchedMonth = reportedTransactions.filter(transaction =>
+      live && transaction.kind === "transfer" && transaction.internalTransfer && !transaction.reconciliation
+      && transaction.amountCents && comparable.has(transaction.accountId ?? transaction.investmentId ?? ""),
+    ).map(({ date }) => date.slice(0, 7)).sort().at(-1) ?? "";
     const points = snapshots.flatMap(({ month, accounts }) => {
       const included = accounts.filter(account => comparable.has(account.id));
       return included.length === comparable.size
-        ? [{ month, cents: summarizeBalances(included).totalCents + bankTransfersAfterMonth(reportedTransactions, comparable, month) }]
+        ? [{ month, cents: summarizeBalances(included).totalCents + bankTransfersAfterMonth(reportedTransactions, comparable, month),
+            hasUnmatchedTransfers: month < lastUnmatchedMonth }]
         : [];
     });
     const available = positions.filter(includesBank).length;
     const partial = comparable.size < available;
     const coverage = partial ? ` O gráfico cobre ${comparable.size} de ${available} contas disponíveis.` : "";
     const investmentCoverage = investments.length ? " Investimentos estimados por fluxo de caixa, com a valorização histórica pendente." : "";
+    const transferCoverage = points.some(point => point.hasUnmatchedTransfers)
+      ? " Alguns fechamentos incluem transferências internas com origem ou destino incerto." : "";
     const description = live && latestClosed
-      ? `Saldo no último dia de cada mês, estimado a partir dos lançamentos efetivados.${coverage}${investmentCoverage}`
+      ? `Saldo no último dia de cada mês, estimado a partir dos lançamentos efetivados.${coverage}${investmentCoverage}${transferCoverage}`
       : undefined;
     const onlyPoint = points.length === 1 ? points[0] : undefined;
     const emptyMessage = onlyPoint
@@ -94,11 +101,12 @@ function buildReports(data: FinancialData, live: boolean) {
     return { points, partial, description, emptyMessage };
   }
 
-  function balanceChartPoint({ month, cents }: { month: string; cents: number }) {
+  function balanceChartPoint({ month, cents, hasUnmatchedTransfers }: { month: string; cents: number; hasUnmatchedTransfers?: boolean }) {
     const closingDate = formatDate(`${month}-${daysInMonth(month)}`);
+    const coverage = hasUnmatchedTransfers ? " · Transferências com dados incompletos" : "";
     return {
       axisLabel: formatShortMonth(month),
-      label: `${live ? "Fechamento estimado" : "Fechamento"} em ${closingDate}`,
+      label: `${live ? "Fechamento estimado" : "Fechamento"} em ${closingDate}${coverage}`,
       values: [cents],
     };
   }

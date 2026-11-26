@@ -45,7 +45,7 @@ export function DashboardPage() {
   const consolidatedBalance = positions.length && positions.every(position => position.balanceCents !== null)
     ? summarizeBalances(accountBalances(positions)).totalCents : null;
   const currentPoint = consolidatedBalance !== null && !evolution.partial && month >= currentMonth
-    ? { month: currentMonth, cents: consolidatedBalance } : undefined;
+    ? { month: currentMonth, cents: consolidatedBalance, hasUnmatchedTransfers: false } : undefined;
   const history = evolution.points.filter(point => point.month <= month);
   if (currentPoint) history.push(currentPoint);
   const balanceSeries = history.slice(-6);

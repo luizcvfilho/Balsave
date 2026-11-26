@@ -20,6 +20,8 @@ INVESTMENT_CATEGORIES = {
     "variable income", "margin", "pension",
 }
 FUND_MOVEMENT_TYPES = {"APLICACAO_FINANCEIRA": "BUY", "RESGATE_APLIC_FINANCEIRA": "SELL"}
+# Pluggy documents automatic investments as part of the account balance for these Open Finance banks.
+BANKS_WITH_INCLUDED_AUTOMATIC_INVESTMENT = {"001", "041", "341"}
 PAYMENT_METHOD_CODES = {
     "PIX": "pix",
     "BOLETO": "boleto",
@@ -155,6 +157,20 @@ def own_account_transfer(raw: dict[str, Any], direction: str, owner_document: st
 
 def investment_transfer(raw: dict[str, Any]) -> bool:
     return label(raw.get("operationType")) in FUND_MOVEMENT_TYPES or label(raw.get("category")).casefold() in INVESTMENT_CATEGORIES
+
+
+def automatic_investment_movement(raw: dict[str, Any], code: str | None) -> bool:
+    operation = label(raw.get("operationType"))
+    category = label(raw.get("category")).casefold()
+    expected_operation = "APLICACAO_FINANCEIRA" if raw["type"] == "DEBIT" else "RESGATE_APLIC_FINANCEIRA"
+    if category == "automatic investment" and operation in ("", "OUTROS", expected_operation):
+        return True
+    # BB reports Rende Fácil redemptions under the proceeds category, alongside separately booked fund redemptions.
+    return (
+        code == "001" and raw["type"] == "CREDIT" and operation == "RESGATE_APLIC_FINANCEIRA"
+        and category in ("", "proceeds interests and dividends")
+        and any(re.search(r"\brende facil\b", plain_text(raw.get(field))) for field in ("description", "descriptionRaw"))
+    )
 
 
 def transaction_kind(
@@ -378,17 +394,24 @@ def load_item(
         bank = bank_names.get(code, fallback_bank) if code else connection_bank
         card = raw.get("type") == "CREDIT" and raw.get("subtype") == "CREDIT_CARD"
         balance = None
+        includes_automatic_investment = False
         if not card and raw.get("type") == "BANK":
             balance = cents(raw.get("balance"))
             bank_data = raw.get("bankData")
             bank_data = bank_data if isinstance(bank_data, dict) else {}
+            automatic_balance = cents(bank_data.get("automaticallyInvestedBalance"))
+            includes_automatic_investment = (
+                raw.get("subtype") == "CHECKING_ACCOUNT" and code in BANKS_WITH_INCLUDED_AUTOMATIC_INVESTMENT
+                and balance is not None and automatic_balance is not None
+                and (automatic_balance == 0 or 0 < automatic_balance == balance)
+            )
             accounts.append({
                 "id": account_id,
                 "bank": bank,
                 "name": label(raw.get("name")) or "Conta bancária",
                 "balanceCents": balance,
                 "asOf": calendar_date(raw.get("updatedAt")) or as_of,
-                "automaticBalanceCents": cents(bank_data.get("automaticallyInvestedBalance")),
+                "automaticBalanceCents": automatic_balance,
                 "_owner": tax_document(raw.get("taxNumber")),
                 "_itemId": str(item_id),
             })
@@ -434,6 +457,9 @@ def load_item(
                             and label(transaction.get("category")).casefold() not in ("taxes on investments", "tax on financial operations", "credit card payment"),
                         "itemId": str(item_id),
                     }
+                    if (includes_automatic_investment and entry["_evidence"]["fundOperation"]
+                            and entry["_evidence"]["eligible"] and automatic_investment_movement(transaction, code)):
+                        entry["_includedAutomaticInvestment"] = True
             elif not card and transaction.get("status") == "POSTED":
                 posted_on = calendar_date(transaction.get("date"))
                 if not posted_on or posted_on <= as_of:
@@ -537,7 +563,7 @@ def portfolio_snapshots(positions: list[dict], entries: list[dict], as_of: str) 
         # Investment valuations before their reference date require historical quotes. Reverse reported cash movements as an estimate.
         balances = estimate_month_end_balances(
             position["balanceCents"], min(as_of, position["asOf"]),
-            ((entry["date"], entry["balanceImpactCents"]) for entry in movements),
+            ((entry["date"], entry.get("_portfolioBalanceImpactCents", entry["balanceImpactCents"])) for entry in movements),
         )
         for month, balance in balances.items():
             snapshots.setdefault(month, []).append({"id": position["id"], "bank": position["bank"], "balanceCents": balance})

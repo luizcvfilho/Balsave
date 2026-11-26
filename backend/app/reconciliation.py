@@ -106,6 +106,12 @@ def reconcile(entries: list[dict], positions: list[dict], decisions: dict[str, d
         if other and edge in edges and reverse.get("counterpartId") == entry["id"] and reverse.get("fingerprint") == other.get("_fingerprint"):
             link(entry, other, "confirmed")
 
+    for entry in available:
+        if entry.get("_includedAutomaticInvestment") and entry["id"] not in occupied:
+            # Keep the original posting in the account statement and exclude it from the consolidated history.
+            entry.update(reconciliation="automatic", _portfolioBalanceImpactCents=0)
+            occupied.add(entry["id"])
+
     counts = Counter(entry_id for edge, strong in edges.items() if strong and not occupied.intersection(edge) for entry_id in edge)
     for edge, strong in edges.items():
         if strong and not occupied.intersection(edge) and all(counts[entry_id] == 1 for entry_id in edge):

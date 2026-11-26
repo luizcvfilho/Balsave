@@ -364,9 +364,48 @@ class FinancialSnapshotTests(TestCase):
         self.assertEqual([entry.get("internalTransfer") for entry in entries], ["account", "account", "account", None])
         self.assertEqual([entry["balanceImpactCents"] for entry in entries], [-50000, 50000, -70000, 70000])
 
+    def test_monthly_balances_exclude_only_automatic_investment_already_in_the_account(self):
+        debit = {**self.entry, "date": "2026-10-09", "amount": 200}
+        redemption = {**debit, "id": str(UUID(int=2)), "type": "CREDIT", "operationType": "RESGATE_APLIC_FINANCEIRA"}
+        income = {**redemption, "id": str(UUID(int=3)), "amount": 7, "operationType": "RENDIMENTO_APLIC_FINANCEIRA",
+                  "category": "Automatic investment"}
+        oldest = {**debit, "id": str(UUID(int=4)), "date": "2026-09-02"}
+        deposit = {**income, "id": str(UUID(int=5)), "date": "2026-11-10", "amount": 50, "operationType": "DEPOSITO",
+                   "category": None}
+        contribution = {**debit, "id": str(UUID(int=6)), "date": deposit["date"], "amount": 50, "operationType": "OUTROS",
+                        "category": "Automatic investment"}
+
+        for code, automatic_balance, recognized in (("001", 800, True), ("341", 0, True), ("041", 800, True),
+                                                    ("001", 600, False), ("001", None, False), ("077", 800, False)):
+            with self.subTest(code=code, automatic_balance=automatic_balance):
+                bank = {"id": ACCOUNT, "type": "BANK", "subtype": "CHECKING_ACCOUNT", "currencyCode": "BRL", "balance": 800,
+                        "bankData": {"transferNumber": f"{code}/0001/00001-2", "automaticallyInvestedBalance": automatic_balance}}
+                credit = ({**redemption, "category": "Proceeds interests and dividends", "descriptionRaw": "BB Rende Fácil"}
+                          if code == "001" else {**redemption, "category": "Automatic investment"})
+                with (
+                    patch("app.financial_snapshot.datetime", wraps=datetime) as clock,
+                    patch.object(pluggy, "meu_pluggy_item"),
+                    patch.object(pluggy, "institutions", return_value=[]),
+                    patch.object(pluggy, "investments", return_value=[]),
+                    patch.object(pluggy, "accounts", return_value=[bank]),
+                    patch.object(pluggy, "transactions", return_value=[oldest, credit, debit, income, deposit, contribution]),
+                ):
+                    clock.now.return_value = datetime(2026, 11, 25)
+                    snapshot = load_snapshot((UUID(int=99),), "test")
+
+                self.assertEqual({row["month"]: row["accounts"][0]["balanceCents"] for row in snapshot["balanceSnapshots"]},
+                                 {"2026-09": 94300, "2026-10": 75000} if recognized else {"2026-09": 79300, "2026-10": 80000})
+                entries = {row["id"]: row for row in snapshot["transactions"]}
+                self.assertEqual(entries[f"{ACCOUNT}.{debit['id']}"]["balanceImpactCents"], -20000)
+                self.assertEqual(entries[f"{ACCOUNT}.{income['id']}"]["kind"], "income")
+                self.assertEqual(entries[f"{ACCOUNT}.{credit['id']}"]["balanceImpactCents"], 20000)
+                self.assertEqual(entries[f"{ACCOUNT}.{credit['id']}"].get("reconciliation"), "automatic" if recognized else None)
+                self.assertEqual(entries[f"{ACCOUNT}.{contribution['id']}"].get("reconciliation"), "automatic" if recognized else None)
+
     def test_snapshot_loads_generic_fund_positions_and_preserves_tax_in_a_matched_redemption(self):
         investment_id = str(UUID(int=10))
-        bank = {"id": ACCOUNT, "type": "BANK", "currencyCode": "BRL", "balance": 1100, "updatedAt": "2026-11-14"}
+        bank = {"id": ACCOUNT, "type": "BANK", "subtype": "CHECKING_ACCOUNT", "currencyCode": "BRL", "balance": 1100,
+                "updatedAt": "2026-11-14", "bankData": {"transferNumber": "001/0001/00001-2", "automaticallyInvestedBalance": 1100}}
         position = {
             "id": investment_id, "itemId": ACCOUNT, "currencyCode": "BRL", "name": "Unrelated fund name",
             "balance": 900, "date": "2026-11-14", "code": "12.345.678/0001-95", "type": "MUTUAL_FUND",
@@ -375,7 +414,9 @@ class FinancialSnapshotTests(TestCase):
         bank_entries = [
             {**self.entry, "id": str(UUID(int=11)), "date": "2026-10-01", "amount": 10, "type": "CREDIT"},
             {**self.entry, "id": str(UUID(int=12)), "date": "2026-11-07", "amount": 100, "type": "CREDIT",
-             "operationType": "RESGATE_APLIC_FINANCEIRA"},
+             "operationType": "RESGATE_APLIC_FINANCEIRA", "category": "Mutual funds"},
+            {**self.entry, "id": str(UUID(int=15)), "date": "2026-11-07", "amount": 100, "type": "CREDIT",
+             "operationType": "RESGATE_APLIC_FINANCEIRA", "category": "Proceeds interests and dividends", "description": "Rende Fácil"},
         ]
         fund_entries = [
             {"id": str(UUID(int=13)), "date": "2026-10-01", "amount": 1000, "netAmount": 1000, "type": "BUY"},
@@ -396,9 +437,11 @@ class FinancialSnapshotTests(TestCase):
         self.assertEqual(snapshot["investments"][0]["balanceCents"], 90000)
         self.assertEqual(snapshot["investments"][0]["fund"], {"lastTwelveMonthsRateBps": 876})
         self.assertEqual(sum(point["balanceCents"] for point in snapshot["balanceSnapshots"][0]["accounts"]), 200200)
-        matched = [entry for entry in snapshot["transactions"] if entry.get("reconciliation") == "automatic"]
+        matched = [entry for entry in snapshot["transactions"] if entry.get("counterpartId")]
         self.assertEqual(len(matched), 2)
         self.assertEqual(sum(entry["balanceImpactCents"] for entry in matched), -200)
+        sweep = next(entry for entry in snapshot["transactions"] if entry["name"] == "Rende Fácil")
+        self.assertEqual((sweep["reconciliation"], sweep["balanceImpactCents"]), ("automatic", 10000))
         self.assertEqual(included["balanceSnapshots"][0]["accounts"], [{"id": ACCOUNT, "bank": "Meu Pluggy · conexão 1", "balanceCents": 110200}])
         self.assertTrue(all(not any(key.startswith("_") for key in entry) for entry in snapshot["transactions"]))
 
