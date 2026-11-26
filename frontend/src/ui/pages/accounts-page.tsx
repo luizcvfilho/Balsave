@@ -73,22 +73,33 @@ export function AccountsPage() {
 
 function InvestmentBalances({ banks }: { banks: ReadonlySet<string> }) {
   const { href } = useReportQuery();
-  const { investments, positions, failedInvestments } = useFinancialReports();
+  const { accounts, investments, positions, failedInvestments } = useFinancialReports();
   const visible = investments.filter(position => !banks.size || banks.has(position.bank));
-  if (!investments.length && !failedInvestments) return <SectionCard id="saldos-investimentos" title="Investimentos" highlighted>
-    <p className="report-muted">Nenhum investimento acompanhado.</p>
-  </SectionCard>;
+  const visibleAccounts = accounts.filter(account => !banks.size || banks.has(account.bank));
   const tracked = positions.filter(position => !banks.size || banks.has(position.bank));
   return <SectionCard id="saldos-investimentos" title="Investimentos" highlighted
-    description="Investimentos indicados como incluídos no saldo da conta são contados uma única vez.">
+    description="Contas e investimentos acompanhados. Valores indicados como incluídos em uma conta são contados uma única vez.">
     <ReportMetrics items={[{ label: "Saldo consolidado acompanhado", value: tracked.every(position => position.balanceCents !== null)
       ? formatMoney(tracked.reduce((sum, position) => sum + (position.balanceCents ?? 0), 0)) : "Indisponível" }]} />
     {failedInvestments ? <p className="report-muted" role="status">Parte dos investimentos está indisponível. O total pode estar incompleto.</p> : null}
-    <BreakdownList rows={visible.map(position => ({
+    <BreakdownList rows={[
+      ...visibleAccounts.flatMap(account => {
+        const automatic = account.includedAutomaticBalanceCents;
+        return [
+          ...(!automatic || account.balanceCents !== automatic ? [{
+            key: `account-${account.id}`, label: `${account.bank} · ${account.name}`,
+            value: formatAvailableMoney(account.balanceCents === null ? null : account.balanceCents - (automatic ?? 0)),
+          }] : []),
+          ...(automatic ? [{ key: `automatic-${account.id}`, label: `Investimento automático ${account.bank} · ${account.name}`,
+            value: formatMoney(automatic) }] : []),
+        ];
+      }),
+      ...visible.map(position => ({
       key: position.id,
-      label: <Link className="report-link report-action" href={href({ investimento: position.id, aba: undefined })}>{position.name}</Link>,
+      label: <><Link className="report-link report-action" href={href({ investimento: position.id, aba: undefined })}>{position.name}</Link>{position.includedInAccountId ? " · incluído no saldo da conta" : ""}</>,
       value: formatAvailableMoney(position.balanceCents),
-    }))} />
+      })),
+    ]} />
   </SectionCard>;
 }
 

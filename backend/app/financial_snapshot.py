@@ -412,6 +412,7 @@ def load_item(
                 "balanceCents": balance,
                 "asOf": calendar_date(raw.get("updatedAt")) or as_of,
                 "automaticBalanceCents": automatic_balance,
+                "includedAutomaticBalanceCents": automatic_balance if includes_automatic_investment and automatic_balance else None,
                 "_owner": tax_document(raw.get("taxNumber")),
                 "_itemId": str(item_id),
             })

@@ -395,6 +395,8 @@ class FinancialSnapshotTests(TestCase):
 
                 self.assertEqual({row["month"]: row["accounts"][0]["balanceCents"] for row in snapshot["balanceSnapshots"]},
                                  {"2026-09": 94300, "2026-10": 75000} if recognized else {"2026-09": 79300, "2026-10": 80000})
+                self.assertEqual(snapshot["accounts"][0]["includedAutomaticBalanceCents"],
+                                 automatic_balance * 100 if recognized and automatic_balance else None)
                 entries = {row["id"]: row for row in snapshot["transactions"]}
                 self.assertEqual(entries[f"{ACCOUNT}.{debit['id']}"]["balanceImpactCents"], -20000)
                 self.assertEqual(entries[f"{ACCOUNT}.{income['id']}"]["kind"], "income")

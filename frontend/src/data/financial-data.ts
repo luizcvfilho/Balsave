@@ -5,6 +5,7 @@ export type ReportAccount = Omit<AccountBalance, "balanceCents"> & {
   id: string;
   name: string;
   balanceCents: number | null;
+  includedAutomaticBalanceCents?: number | null;
 };
 
 export type ReportInvestment = ReportAccount & {
